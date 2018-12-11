@@ -1,0 +1,100 @@
+---
+title: "매일노동신문"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Crawling & Data Cleaning packages
+library(tidyverse)
+library(httr)
+library(XML)
+library(rvest)
+library(xlsx)
+library(stringr)
+library(readxl)
+```
+```{r}
+mael_url1 <- "http://www.labortoday.co.kr/news/articleList.html?page="
+mael_url2 <- "&total=1082&sc_section_code=&sc_sub_section_code=&sc_serial_code=&sc_area=A&sc_level=&sc_article_type=&sc_view_level=&sc_sdate=&sc_edate=&sc_serial_number=&sc_word=%C0%CC%B7%A3%B5%E5&sc_word2=&sc_andor=&sc_order_by=E&view_type=sm"
+mael_url <- c()
+for(i in 1:55){
+  mael_url <- c(mael_url,paste0(mael_url1,i,mael_url2)) # Creates a list of urls for 매일노동신문
+}
+```
+```{r}
+options(timeout= 4000000)  # Expand time limit 
+
+mael_href <- c()
+mael_titles <- c()
+mael_dates <- c()
+
+for(i in 1:length(mael_url)){
+  mael_web <- GET(mael_url[i])
+  mael_txt <- read_html(mael_web)
+  link <- html_nodes(mael_txt,"div#article-control td.list-titles a")
+  mael_href <- c(mael_href, paste0("http://www.labortoday.co.kr/news/",unique(html_attr(link,"href"))))
+  mael_titles <- c(mael_titles,try(html_text(html_nodes(mael_txt,"div#article-control td.list-titles a"))))
+  Sys.sleep(runif(1,1,10))
+}
+mael_df <- data_frame(Title = mael_titles,url = mael_href,Dates=NA, Contents = NA)
+```
+```{r}
+options(timeout=4000000)
+
+for(i in 1:length(mael_df$url)){
+  article_url <- mael_df$url[i]
+  article_web <- try(GET(article_url))
+  article_html <- try(read_html(article_web))
+  article_date <- try(html_text(html_nodes(article_html,"div.info li.date")))
+  article_date <- try(substring(article_date,4,13))
+  article_contents <- try(html_text(html_nodes(article_html,"div#articleBody.cont-body")))
+  try(mael_df$Contents[mael_df$url==article_url] <- article_contents)
+  try(mael_df$Dates[mael_df$url==article_url] <- article_date)
+}
+mael_newdf <- mael_df%>%filter(!is.na(Contents))
+mael_newdf
+write.xlsx(mael_newdf,"Labortoday_이랜드.xlsx")
+```
+```{r}
+
+```
+```{r}
+## 매일노동신문_이랜드  Import
+today_df <- read_excel("Labortoday_이랜드.xlsx")
+
+today_df$Dates <- gsub("[.]","-",today_df$Dates)
+today_df$Dates <- as.Date(today_df$Dates,"%Y-%m-%d")
+today_newdf <- today_df[today_df$Dates >= "2006-01-01"&today_df$Dates <= "2008-12-31",]
+
+write.xlsx(today_newdf,"Labortoday_이랜드.xlsx")
+
+today_newdf$key1 <- as.factor(as.integer(grepl(pattern = "이랜드",x=today_newdf$Contents)))
+today_newdf$key2 <- as.factor(as.integer(grepl(pattern = "뉴코아",x=today_newdf$Contents)))
+today_newdf$key3 <- as.factor(as.integer(grepl(pattern = "노조",x=today_newdf$Contents)))
+today_newdf$key4 <- as.factor(as.integer(grepl(pattern = "정규직",x=today_newdf$Contents)))
+today_newdf$key5 <- as.factor(as.integer(grepl(pattern = "전환배치",x=today_newdf$Contents)))
+
+today_newdf%>%ggplot(aes(x=Dates,y=key1,group=key1,fill=key1))+
+  geom_histogram(stat = "identity")+
+  geom_histogram(aes(x=Dates,y=key2,group=key2,fill=key2),stat = "identity")
+```
+```{r}
+today_newdf%>%ggplot(aes(x=Dates))+
+  geom_histogram(aes(y=key1,fill="이랜드"),stat = "identity")+
+  geom_histogram(aes(y=key2,fill="뉴코아"),stat = "identity")+
+  geom_histogram(aes(y=key3,fill="노조"),stat = "identity")+
+  geom_histogram(aes(y=key4,fill="정규직"),stat = "identity")+
+  geom_histogram(aes(y=key5,fill="전환배치"),stat = "identity")+
+  scale_fill_manual(values = c("red","yellow","blue","purple","green"))
+```
+
+```{r}
+
+```
+```{r}
+
+```

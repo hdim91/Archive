@@ -1,0 +1,822 @@
+---
+title: "Main Analysis Part 2"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Package List
+
+```{r}
+library(tidyverse)
+library(tibble)
+library(readxl)
+library(zoo)
+library(lubridate)
+library(xlsx)
+library(rJava)
+library(foreign)
+library(haven)
+library(XLConnect)
+#library(KoNLP)
+```
+
+```{r}
+rm(ls=list())
+```
+```{r}
+marketp <- read_spss("2008언론수용자조사(14회)_data_공개.SAV")
+main_df <- read_excel("Main_df.xlsx")
+main_df
+main_df$monthly <- cut(main_df$Dates,breaks = "months")
+main_df$monthly <- as.yearmon(main_df$monthly)
+```
+```{r}
+main_df$cat1 <- as.factor(as.integer(grepl(pattern="노조",x=main_df$Contents)))
+main_df$cat2 <- as.factor(as.integer(grepl(pattern="노동조합",x=main_df$Contents)))
+main_df$cat3 <- as.factor(as.integer(grepl(pattern="노동 조합",x=main_df$Contents)))
+
+target_df <- main_df[main_df$cat1==1|main_df$cat2==1|main_df$cat3==1,]
+```
+
+
+# Create the data by sentence
+
+```{r}
+# Split each article by sentence into list
+text_lines <- c()
+for(i in 1:length(target_df$Contents)){
+  text_lines[i] <- strsplit(target_df$Contents[i],"(?<=\\.)\\s(?=[가-힣])",perl = T)
+}
+
+# Store unlist the sublist of text_lines and store them into the new list Lines
+# Corresponding to text_lines, Create a new list Title to align lists
+Lines <- c()
+Title <- c()
+for(i in 1:length(text_lines)){
+  Lines<-c(Lines,unlist(text_lines[i]))
+  Title <- c(Title,rep(target_df$Title[i],length(unlist(text_lines[i]))))
+}
+
+# Check whether two list have the same dimension
+length(Lines);length(Title)
+# Create the dataframe that contains titles and sentences of articles
+text_df <- data_frame(Title=Title,Lines=Lines)
+
+
+```
+
+
+```{r}
+# keys: 이랜드, 뉴코아, 노조, 전환배치, 공동투쟁본부, 이랜드 노조, 뉴코아 노조, 뉴코아-이랜드, 이랜드-뉴코아, 뉴코아 이랜드,
+#       이랜드 뉴코아
+# person: 김경욱, 이남신, 이경옥, 홍윤경, 박양수, 김호진, 최호섭
+target_df1 <- target_df
+target_df1$weekly <- as.Date(cut(target_df1$Dates,breaks = "week"))
+target_df1$key1 <- as.factor(as.integer(grepl(pattern = "이랜드",x=target_df1$Contents)))
+target_df1$key2 <- as.factor(as.integer(grepl(pattern = "뉴코아",x=target_df1$Contents)))
+target_df1$key3 <- as.factor(as.integer(grepl(pattern = "노조",x=target_df1$Contents)))
+target_df1$key4 <- as.factor(as.integer(grepl(pattern = "전환배치",x=target_df1$Contents)))
+target_df1$key5 <- as.factor(as.integer(grepl(pattern = "공동투쟁본부",x=target_df1$Contents)))
+target_df1$key6 <- as.factor(as.integer(grepl(pattern = "이랜드 노조",x=target_df1$Contents)))
+target_df1$key6sub <- as.factor(as.integer(grepl(pattern = "이랜드 노동조합",x=target_df1$Contents)))
+target_df1$key6 <- ifelse(target_df1$key6==1|target_df1$key6sub==1,1,0)
+target_df1$key7 <- as.factor(as.integer(grepl(pattern = "뉴코아 노조",x=target_df1$Contents)))
+target_df1$key7sub <- as.factor(as.integer(grepl(pattern = "뉴코아 노동조합",x=target_df1$Contents)))
+target_df1$key7 <- ifelse(target_df1$key7==1|target_df1$key7sub==1,1,0)
+target_df1$key8 <- as.factor(as.integer(grepl(pattern = "뉴코아-이랜드",x=target_df1$Contents)))
+target_df1$key9 <- as.factor(as.integer(grepl(pattern = "이랜드-뉴코아",x=target_df1$Contents)))
+target_df1$key10 <- as.factor(as.integer(grepl(pattern = "뉴코아 이랜드",x=target_df1$Contents)))
+target_df1$key11 <- as.factor(as.integer(grepl(pattern = "이랜드 뉴코아",x=target_df1$Contents))) 
+target_df1$person1 <- as.factor(as.integer(grepl(pattern = "김경욱",x=target_df1$Contents)))
+target_df1$person2 <- as.factor(as.integer(grepl(pattern = "이남신",x=target_df1$Contents)))
+target_df1$person3 <- as.factor(as.integer(grepl(pattern = "이경옥",x=target_df1$Contents)))
+target_df1$person4 <- as.factor(as.integer(grepl(pattern = "홍윤경",x=target_df1$Contents)))
+target_df1$person5 <- as.factor(as.integer(grepl(pattern = "박양수",x=target_df1$Contents)))
+target_df1$person6 <- as.factor(as.integer(grepl(pattern = "김호진",x=target_df1$Contents)))
+target_df1$person7 <- as.factor(as.integer(grepl(pattern = "최호섭",x=target_df1$Contents)))
+
+target_df1$newk1 <- as.factor(as.integer(grepl(pattern = "배치전환",x=target_df1$Contents)))
+target_df1$newk2 <- as.factor(as.integer(grepl(pattern = "전환배치",x=target_df1$Contents)))
+target_df1$newk3 <- as.factor(as.integer(grepl(pattern = "배치 전환",x=target_df1$Contents)))
+target_df1$newk4 <- as.factor(as.integer(grepl(pattern = "전환 배치",x=target_df1$Contents)))
+target_df1$newk5 <- as.factor(as.integer(grepl(pattern = "구조조정",x=target_df1$Contents)))
+target_df1$newk6 <- as.factor(as.integer(grepl(pattern = "이랜드일반노조",x=target_df1$Contents)))
+target_df1$newk7 <- as.factor(as.integer(grepl(pattern = "뉴코아노조",x=target_df1$Contents)))
+target_df1$newk8 <- as.factor(as.integer(grepl(pattern = "이랜드 일반노조",x=target_df1$Contents)))
+target_df1$newk9 <- as.factor(as.integer(grepl(pattern = "비정규직",x=target_df1$Contents)))
+
+tab_newk <- matrix()
+```
+```{r}
+# Join article dataset with main dataset
+new_main <- text_df%>%left_join(target_df[,c("Title","Dates","Provider","monthly")],by="Title")
+# Display first 6 lines of the new_main dataset
+head(new_main)
+```
+```{r}
+# key1~key11: Basic keywords related to the Eland incident
+new_main$key1 <- as.factor(as.integer(grepl(pattern = "이랜드",x=new_main$Lines)))
+new_main$key2 <- as.factor(as.integer(grepl(pattern = "뉴코아",x=new_main$Lines)))
+new_main$key3 <- as.factor(as.integer(grepl(pattern = "노조",x=new_main$Lines)))
+new_main$key4 <- as.factor(as.integer(grepl(pattern = "전환배치",x=new_main$Lines)))
+new_main$key5 <- as.factor(as.integer(grepl(pattern = "공동투쟁본부",x=new_main$Lines)))
+new_main$key6 <- as.factor(as.integer(grepl(pattern = "이랜드 노조",x=new_main$Lines)))
+new_main$key6sub <- as.factor(as.integer(grepl(pattern = "이랜드 노동조합",x=new_main$Lines)))
+new_main$key6 <- ifelse(new_main$key6==1|new_main$key6sub==1,1,0)
+new_main$key7 <- as.factor(as.integer(grepl(pattern = "뉴코아 노조",x=new_main$Lines)))
+new_main$key7sub <- as.factor(as.integer(grepl(pattern = "뉴코아 노동조합",x=new_main$Lines)))
+new_main$key7 <- ifelse(new_main$key7==1|new_main$key7sub==1,1,0)
+new_main$key8 <- as.factor(as.integer(grepl(pattern = "뉴코아-이랜드",x=new_main$Lines)))
+new_main$key9 <- as.factor(as.integer(grepl(pattern = "이랜드-뉴코아",x=new_main$Lines)))
+new_main$key10 <- as.factor(as.integer(grepl(pattern = "뉴코아 이랜드",x=new_main$Lines)))
+new_main$key11 <- as.factor(as.integer(grepl(pattern = "이랜드 뉴코아",x=new_main$Lines))) 
+
+# person1~person7: Necessary speakers related to the topics
+new_main$person1 <- as.factor(as.integer(grepl(pattern = "김경욱",x=new_main$Lines)))
+new_main$person2 <- as.factor(as.integer(grepl(pattern = "이남신",x=new_main$Lines)))
+new_main$person3 <- as.factor(as.integer(grepl(pattern = "이경옥",x=new_main$Lines)))
+new_main$person4 <- as.factor(as.integer(grepl(pattern = "홍윤경",x=new_main$Lines)))
+new_main$person5 <- as.factor(as.integer(grepl(pattern = "박양수",x=new_main$Lines)))
+new_main$person6 <- as.factor(as.integer(grepl(pattern = "김호진",x=new_main$Lines)))
+new_main$person7 <- as.factor(as.integer(grepl(pattern = "최호섭",x=new_main$Lines)))
+
+# newk1~ newk9: Additional keywords related to the topics (some are redundant)
+new_main$newk1 <- as.factor(as.integer(grepl(pattern = "배치전환",x=new_main$Lines)))
+new_main$newk2 <- as.factor(as.integer(grepl(pattern = "전환배치",x=new_main$Lines)))
+new_main$newk3 <- as.factor(as.integer(grepl(pattern = "배치 전환",x=new_main$Lines)))
+new_main$newk4 <- as.factor(as.integer(grepl(pattern = "전환 배치",x=new_main$Lines)))
+new_main$newk5 <- as.factor(as.integer(grepl(pattern = "구조조정",x=new_main$Lines)))
+new_main$newk6 <- as.factor(as.integer(grepl(pattern = "이랜드일반노조",x=new_main$Lines)))
+new_main$newk7 <- as.factor(as.integer(grepl(pattern = "뉴코아노조",x=new_main$Lines)))
+new_main$newk8 <- as.factor(as.integer(grepl(pattern = "이랜드 일반노조",x=new_main$Lines)))
+new_main$newk9 <- as.factor(as.integer(grepl(pattern = "비정규직",x=new_main$Lines)))
+
+
+# 배치전환, 전환배치, 배치 전환, 전환 배치, 구조조정,, 이랜드일반노조, 뉴코아노조, 이랜드 일반노조, 비정규직
+#
+```
+
+
+```{r}
+new_main%>%filter(key1==1)%>%filter(person1==1)%>%ggplot(aes(x=monthly,y=key6))+geom_bar(stat="identity")
+```
+```{r}
+new_main_lim <- new_main[new_main$Dates>="2007-06-01" & new_main$Dates<="2007-10-31",]
+new_main_lim$Weeks <- as.Date(cut(new_main_lim$Dates,breaks="week"))
+```
+```{r}
+new_main_lim
+```
+```{r}
+person1time <- new_main_lim%>%group_by(Weeks)%>%filter(person1==1)%>%count(person1)
+colnames(person1time)[2] <- "Speaker"
+person1time$Speaker <- as.numeric(person1time$Speaker)
+person1time$Speaker[person1time$Speaker==2] <- 1
+person2time <- new_main_lim%>%group_by(Weeks)%>%filter(person2==1)%>%count(person2)
+colnames(person2time)[2] <- "Speaker"
+person2time
+person2time$Speaker <- as.numeric(person2time$Speaker)
+person2time$Speaker[person2time$Speaker==2] <- 2
+person3time <- new_main_lim%>%group_by(Weeks)%>%filter(person3==1)%>%count(person3)
+colnames(person3time)[2] <- "Speaker"
+person3time$Speaker <- as.numeric(person3time$Speaker)
+person3time$Speaker[person3time$Speaker==2] <- 3
+person4time <- new_main_lim%>%group_by(Weeks)%>%filter(person4==1)%>%count(person4)
+colnames(person4time)[2] <- "Speaker"
+person4time$Speaker <- as.numeric(person4time$Speaker)
+person4time$Speaker[person4time$Speaker==2] <- 4
+person5time <- new_main_lim%>%group_by(Weeks)%>%filter(person5==1)%>%count(person5)
+colnames(person5time)[2] <- "Speaker"
+person5time$Speaker <- as.numeric(person5time$Speaker)
+person5time$Speaker[person5time$Speaker==2] <- 5
+person6time <- new_main_lim%>%group_by(Weeks)%>%filter(person6==1)%>%count(person6)
+colnames(person6time)[2] <- "Speaker"
+person6time$Speaker <- as.numeric(person6time$Speaker)
+person6time$Speaker[person6time$Speaker==2] <- 6
+person7time <- new_main_lim%>%group_by(Weeks)%>%filter(person7==1)%>%count(person7)
+colnames(person7time)[2] <- "Speaker"
+person7time$Speaker <- as.numeric(person7time$Speaker)
+person7time$Speaker[person7time$Speaker==2] <- 7
+persontime1 <- rbind(person1time,person2time)
+persontime1 <- rbind(persontime1,person3time)
+persontime1 <- rbind(persontime1,person4time)
+persontime1 <- rbind(persontime1,person5time) 
+persontime1 <- rbind(persontime1,person6time)
+persontime1 <- rbind(persontime1,person7time)
+persontime1$Speaker <- as.character(persontime1$Speaker)
+persontime1$n <- as.numeric(persontime1$n)
+pg2_1 <- persontime1%>%filter(!is.na(n))%>%filter(!is.na(Speaker))%>%filter(!is.na(Weeks))%>%
+  ggplot(aes(x=as.Date(Weeks),y=n,fill=Speaker))+geom_bar(stat="identity",position = "stack")+#+geom_area(stat="identity")
+  scale_x_date(date_breaks = "1 month", date_minor_breaks = "1 week", date_labels = "%Y-%m")+
+  ylab("Frequency")+xlab("Time")+theme_classic()+
+  scale_fill_discrete(labels = c("KKW","LKO","LMS","HWK","PYS","CHS","KHJ"))
+pg2_1
+```
+```{r}
+reduced_new_main <- new_main%>%group_by(Provider,monthly)%>%count(Title)
+Provider_table <- table(reduced_new_main$Provider,reduced_new_main$monthly)
+Provider_table <- as.data.frame.matrix(Provider_table)
+head(Provider_table)
+write.xlsx(Provider_table,"Main_Analysis-Part2_files\\Tables\\Table2-1.xlsx")
+```
+```{r}
+reduced_new_main_lim<-new_main_lim%>%group_by(Provider,monthly)%>%count(Title)
+table(reduced_new_main_lim$Provider,reduced_new_main_lim$monthly)
+Provider_table_lim <- table(reduced_new_main_lim$Provider,reduced_new_main_lim$monthly)
+Provider_table_lim <- as.data.frame.matrix(Provider_table_lim)
+write.xlsx(Provider_table_lim,"Main_Analysis-Part2_files\\Tables\\Table2-2.xlsx")
+```
+```{r}
+new_main$nonkey1 <- ifelse(new_main$key1==0,1,0)
+rel1<-new_main%>%group_by(Title)%>%
+  summarise(rel1=sum(as.integer(key1))/(sum(as.integer(key1))+sum(as.integer(nonkey1))))
+new_main$nonkey2 <- ifelse(new_main$key2==0,1,0)
+rel2<-new_main%>%group_by(Title)%>%
+  summarise(rel2=sum(as.integer(key2))/(sum(as.integer(key2))+sum(as.integer(nonkey2))))
+new_main$nonkey3 <- ifelse(new_main$key3==0,1,0)
+rel3<-new_main%>%group_by(Title)%>%
+  summarise(rel3=sum(as.integer(key3))/(sum(as.integer(key3))+sum(as.integer(nonkey3))))
+new_main$nonkey4 <- ifelse(new_main$key4==0,1,0)
+rel4<-new_main%>%group_by(Title)%>%
+  summarise(rel4=sum(as.integer(key4))/(sum(as.integer(key4))+sum(as.integer(nonkey4))))
+new_main$nonkey5 <- ifelse(new_main$key5==0,1,0)
+rel5<-new_main%>%group_by(Title)%>%
+  summarise(rel5=sum(as.integer(key5))/(sum(as.integer(key5))+sum(as.integer(nonkey5))))
+new_main$nonkey6 <- ifelse(new_main$key6==0,1,0)
+rel6<-new_main%>%group_by(Title)%>%
+  summarise(rel6=sum(as.integer(key6))/(sum(as.integer(key6))+sum(as.integer(nonkey6))))
+new_main$nonkey7 <- ifelse(new_main$key7==0,1,0)
+rel7<-new_main%>%group_by(Title)%>%
+  summarise(rel7=sum(as.integer(key7))/(sum(as.integer(key7))+sum(as.integer(nonkey7))))
+new_main$nonkey8 <- ifelse(new_main$key8==0,1,0)
+rel8<-new_main%>%group_by(Title)%>%
+  summarise(rel8=sum(as.integer(key8))/(sum(as.integer(key8))+sum(as.integer(nonkey8))))
+new_main$nonkey9 <- ifelse(new_main$key9==0,1,0)
+rel9<-new_main%>%group_by(Title)%>%
+  summarise(rel9=sum(as.integer(key9))/(sum(as.integer(key9))+sum(as.integer(nonkey9))))
+new_main$nonkey10 <- ifelse(new_main$key10==0,1,0)
+rel10<-new_main%>%group_by(Title)%>%
+  summarise(rel10=sum(as.integer(key10))/(sum(as.integer(key10))+sum(as.integer(nonkey10))))
+new_main$nonkey11 <- ifelse(new_main$key11==0,1,0)
+rel11<-new_main%>%group_by(Title)%>%
+  summarise(rel11=sum(as.integer(key11))/(sum(as.integer(key11))+sum(as.integer(nonkey11))))
+rel_fre <- rel1%>%left_join(rel2,by="Title")
+rel_fre <- rel_fre%>%left_join(rel3,by="Title")
+rel_fre <- rel_fre%>%left_join(rel4,by="Title")
+rel_fre <- rel_fre%>%left_join(rel5,by="Title")
+rel_fre <- rel_fre%>%left_join(rel6,by="Title")
+rel_fre <- rel_fre%>%left_join(rel7,by="Title")
+rel_fre <- rel_fre%>%left_join(rel8,by="Title")
+rel_fre <- rel_fre%>%left_join(rel9,by="Title")
+rel_fre <- rel_fre%>%left_join(rel10,by="Title")
+rel_fre <- rel_fre%>%left_join(rel11,by="Title")
+rel_fre
+```
+
+```{r}
+rel_df<-rel_fre%>%left_join(new_main[,c("Title","monthly","Provider","person1","person2",
+                                        "person3","person4","person5","person6","person7")],by="Title")
+rel_df$person <- NA
+rel_df$person[rel_df$person2==1] <- 2
+rel_df$person[rel_df$person1==1] <- 1
+rel_df$person[rel_df$person3==1] <- 3
+rel_df$person[rel_df$person4==1] <- 4
+rel_df$person[rel_df$person5==1] <- 5
+rel_df$person[rel_df$person6==1] <- 6
+rel_df$person[rel_df$person7==1] <- 7
+rel_df$person <- as.factor(rel_df$person)
+levels(rel_df$person)<-c("김경욱","이남신","이경옥","홍윤경","박양수","김호진","최호섭")
+```
+```{r}
+## keys: 이랜드, 뉴코아, 노조, 전환배치, 공동투쟁본부, 이랜드 노조, 뉴코아 노조, 뉴코아-이랜드, 이랜드-뉴코아, 뉴코아 이랜드,
+##       이랜드 뉴코아
+## person: 김경욱, 이남신, 이경옥, 홍윤경, 박양수, 김호진, 최호섭
+provider_rel <- rel_df%>%group_by(Provider)%>%summarise(mean_rel1=mean(rel1),mean_rel2=mean(rel2),mean_rel3=mean(rel3),
+                                        mean_rel4=mean(rel4),mean_rel5=mean(rel5),mean_rel6=mean(rel6),
+                                        mean_rel7=mean(rel7),mean_rel8=mean(rel8),mean_rel9=mean(rel9),
+                                        mean_rel10=mean(rel10),mean_rel11=mean(rel11))
+names(provider_rel)[2:12]<- c("이랜드", "뉴코아", "노조", "전환배치", "공동투쟁본부", "이랜드 노조", "뉴코아 노조", "뉴코아-이랜드", "이랜드-뉴코아", "뉴코아 이랜드","이랜드 뉴코아")
+```
+```{r}
+person_rel <- rel_df%>%group_by(person)%>%summarise(mean_rel1=mean(rel1),mean_rel2=mean(rel2),mean_rel3=mean(rel3),
+                                        mean_rel4=mean(rel4),mean_rel5=mean(rel5),mean_rel6=mean(rel6),
+                                        mean_rel7=mean(rel7),mean_rel8=mean(rel8),mean_rel9=mean(rel9),
+                                        mean_rel10=mean(rel10),mean_rel11=mean(rel11))
+names(person_rel)[2:12]<- c("이랜드", "뉴코아", "노조", "전환배치", "공동투쟁본부", "이랜드 노조", "뉴코아 노조", "뉴코아-이랜드", "이랜드-뉴코아", "뉴코아 이랜드","이랜드 뉴코아")
+write.xlsx(person_rel[-8,],"Main_Analysis-Part2_files\\Tables\\Table2-2.xlsx")
+```
+
+```{r}
+monthly_data <- new_main[new_main$Dates>="2007-01-01" & new_main$Dates<="2007-12-31",]
+weekly_data <- new_main[new_main$Dates>="2007-05-01" & new_main$Dates<="2007-10-31",]
+weekly_data$week <- as.Date(cut(weekly_data$Dates,breaks = "week"))
+main_df$week <- as.Date(cut(main_df$Dates,breaks="week"))
+```
+
+
+```{r}
+# keys: 이랜드, 뉴코아, 노조, 전환배치, 공동투쟁본부, 이랜드 노조, 뉴코아 노조, 뉴코아-이랜드, 이랜드-뉴코아, 뉴코아 이랜드,
+#       이랜드 뉴코아
+# person: 김경욱, 이남신, 이경옥, 홍윤경, 박양수, 김호진, 최호섭
+# newkeys: 배치전환, 전환배치, 배치 전환, 전환 배치, 구조조정,, 이랜드일반노조, 뉴코아노조, 이랜드 일반노조, 비정규직
+monthly_data$cat1 <- as.factor(as.integer(grepl(pattern = "뉴코아 노조",x=monthly_data$Lines))) 
+monthly_data$cat2 <- as.factor(as.integer(grepl(pattern = "뉴코아 노동조합",x=monthly_data$Lines))) 
+weekly_data$cat1 <- as.factor(as.integer(grepl(pattern = "뉴코아 노조",x=weekly_data$Lines))) 
+weekly_data$cat2 <- as.factor(as.integer(grepl(pattern = "뉴코아 노동조합",x=weekly_data$Lines))) 
+
+length(unique(monthly_data$Title[monthly_data$key7==1|monthly_data$newk7==1|monthly_data$cat2==1]))
+
+
+newkoa <- main_df[monthly_data$key1==1&main_df$Dates>="2007-01-01"&main_df$Dates<="2007-12-31",]
+newkoa <-  text_df%>%left_join(newkoa[,c("Title","Dates","Provider","monthly","Contents")],by="Title")
+newkoa_lim <- main_df[weekly_data$key1==1&main_df$Dates>="2007-05-01"&main_df$Dates<="2007-10-31",]
+newkoa_lim <-  text_df%>%left_join(newkoa_lim[,c("Title","Dates","Provider","week","Contents")],by="Title")
+newkoa$monthly <- format(as.Date(newkoa$Dates),"%Y-%m")
+
+newkoa$key1 <- as.factor(as.integer(grepl(pattern = "이랜드",x=newkoa$Lines)))
+newkoa$key2 <- as.factor(as.integer(grepl(pattern = "뉴코아",x=newkoa$Lines)))
+newkoa$key3 <- as.factor(as.integer(grepl(pattern = "노조",x=newkoa$Lines)))
+newkoa$key4 <- as.factor(as.integer(grepl(pattern = "전환배치",x=newkoa$Lines)))
+newkoa$key5 <- as.factor(as.integer(grepl(pattern = "공동투쟁본부",x=newkoa$Lines)))
+newkoa$key6 <- as.factor(as.integer(grepl(pattern = "이랜드 노조",x=newkoa$Lines)))
+newkoa$key7 <- as.factor(as.integer(grepl(pattern = "뉴코아 노조",x=newkoa$Lines)))
+newkoa$key8 <- as.factor(as.integer(grepl(pattern = "뉴코아-이랜드",x=newkoa$Lines)))
+newkoa$key9 <- as.factor(as.integer(grepl(pattern = "이랜드-뉴코아",x=newkoa$Lines)))
+newkoa$key10 <- as.factor(as.integer(grepl(pattern = "뉴코아 이랜드",x=newkoa$Lines)))
+newkoa$key11 <- as.factor(as.integer(grepl(pattern = "이랜드 뉴코아",x=newkoa$Lines))) 
+
+newkoa$person1 <- as.factor(as.integer(grepl(pattern = "김경욱",x=newkoa$Lines)))
+newkoa$person2 <- as.factor(as.integer(grepl(pattern = "이남신",x=newkoa$Lines)))
+newkoa$person3 <- as.factor(as.integer(grepl(pattern = "이경옥",x=newkoa$Lines)))
+newkoa$person4 <- as.factor(as.integer(grepl(pattern = "홍윤경",x=newkoa$Lines)))
+newkoa$person5 <- as.factor(as.integer(grepl(pattern = "박양수",x=newkoa$Lines)))
+newkoa$person6 <- as.factor(as.integer(grepl(pattern = "김호진",x=newkoa$Lines)))
+newkoa$person7 <- as.factor(as.integer(grepl(pattern = "최호섭",x=newkoa$Lines)))
+
+newkoa$newk1 <- as.factor(as.integer(grepl(pattern = "배치전환",x=newkoa$Lines)))
+newkoa$newk2 <- as.factor(as.integer(grepl(pattern = "전환배치",x=newkoa$Lines)))
+newkoa$newk3 <- as.factor(as.integer(grepl(pattern = "배치 전환",x=newkoa$Lines)))
+newkoa$newk4 <- as.factor(as.integer(grepl(pattern = "전환 배치",x=newkoa$Lines)))
+newkoa$newk5 <- as.factor(as.integer(grepl(pattern = "구조조정",x=newkoa$Lines)))
+newkoa$newk6 <- as.factor(as.integer(grepl(pattern = "이랜드일반노조",x=newkoa$Lines)))
+newkoa$newk7 <- as.factor(as.integer(grepl(pattern = "뉴코아노조",x=newkoa$Lines)))
+newkoa$newk8 <- as.factor(as.integer(grepl(pattern = "이랜드 일반노조",x=newkoa$Lines)))
+newkoa$newk9 <- as.factor(as.integer(grepl(pattern = "비정규직",x=newkoa$Lines)))
+
+
+# Create keywords and person variables for weekly data
+newkoa_lim$key1 <- as.factor(as.integer(grepl(pattern = "이랜드",x=newkoa_lim$Lines)))
+newkoa_lim$key2 <- as.factor(as.integer(grepl(pattern = "뉴코아",x=newkoa_lim$Lines)))
+newkoa_lim$key3 <- as.factor(as.integer(grepl(pattern = "노조",x=newkoa_lim$Lines)))
+newkoa_lim$key4 <- as.factor(as.integer(grepl(pattern = "전환배치",x=newkoa_lim$Lines)))
+newkoa_lim$key5 <- as.factor(as.integer(grepl(pattern = "공동투쟁본부",x=newkoa_lim$Lines)))
+newkoa_lim$key6 <- as.factor(as.integer(grepl(pattern = "이랜드 노조",x=newkoa_lim$Lines)))
+newkoa_lim$key7 <- as.factor(as.integer(grepl(pattern = "뉴코아 노조",x=newkoa_lim$Lines)))
+newkoa_lim$key8 <- as.factor(as.integer(grepl(pattern = "뉴코아-이랜드",x=newkoa_lim$Lines)))
+newkoa_lim$key9 <- as.factor(as.integer(grepl(pattern = "이랜드-뉴코아",x=newkoa_lim$Lines)))
+newkoa_lim$key10 <- as.factor(as.integer(grepl(pattern = "뉴코아 이랜드",x=newkoa_lim$Lines)))
+newkoa_lim$key11 <- as.factor(as.integer(grepl(pattern = "이랜드 뉴코아",x=newkoa_lim$Lines))) 
+
+newkoa_lim$person1 <- as.factor(as.integer(grepl(pattern = "김경욱",x=newkoa_lim$Lines)))
+newkoa_lim$person2 <- as.factor(as.integer(grepl(pattern = "이남신",x=newkoa_lim$Lines)))
+newkoa_lim$person3 <- as.factor(as.integer(grepl(pattern = "이경옥",x=newkoa_lim$Lines)))
+newkoa_lim$person4 <- as.factor(as.integer(grepl(pattern = "홍윤경",x=newkoa_lim$Lines)))
+newkoa_lim$person5 <- as.factor(as.integer(grepl(pattern = "박양수",x=newkoa_lim$Lines)))
+newkoa_lim$person6 <- as.factor(as.integer(grepl(pattern = "김호진",x=newkoa_lim$Lines)))
+newkoa_lim$person7 <- as.factor(as.integer(grepl(pattern = "최호섭",x=newkoa_lim$Lines)))
+
+newkoa_lim$newk1 <- as.factor(as.integer(grepl(pattern = "배치전환",x=newkoa_lim$Lines)))
+newkoa_lim$newk2 <- as.factor(as.integer(grepl(pattern = "전환배치",x=newkoa_lim$Lines)))
+newkoa_lim$newk3 <- as.factor(as.integer(grepl(pattern = "배치 전환",x=newkoa_lim$Lines)))
+newkoa_lim$newk4 <- as.factor(as.integer(grepl(pattern = "전환 배치",x=newkoa_lim$Lines)))
+newkoa_lim$newk5 <- as.factor(as.integer(grepl(pattern = "구조조정",x=newkoa_lim$Lines)))
+newkoa_lim$newk6 <- as.factor(as.integer(grepl(pattern = "이랜드일반노조",x=newkoa_lim$Lines)))
+newkoa_lim$newk7 <- as.factor(as.integer(grepl(pattern = "뉴코아노조",x=newkoa_lim$Lines)))
+newkoa_lim$newk8 <- as.factor(as.integer(grepl(pattern = "이랜드 일반노조",x=newkoa_lim$Lines)))
+newkoa_lim$newk9 <- as.factor(as.integer(grepl(pattern = "비정규직",x=newkoa_lim$Lines)))
+
+monthly_data <- monthly_data[monthly_data$cat1==1|monthly_data$cat2==1,]
+weekly_data <- weekly_data[weekly_data$cat1==1|weekly_data$cat2==1,]
+
+length(main_df$Contents[main_df$newk1==1|main_df$newk2==1|main_df$newk3==1|main_df$newk4==1&main_df$Dates>="2007-01-01"&main_df$Dates<="2007-12-31"])
+
+length(unique(monthly_data$Title))
+length(unique(weekly_data$Title))
+length(unique(monthly_data$Title[monthly_data$newk1==1|monthly_data$newk2==1|monthly_data$newk3==1|monthly_data$newk4==1|monthly_data$newk5==1]))
+length(unique(monthly_data$Title[monthly_data$newk9==1]))
+length(unique(weekly_data$Title[weekly_data$newk1==1|weekly_data$newk2==1|weekly_data$newk3==1|weekly_data$newk4==1|weekly_data$newk5==1]))
+length(unique(weekly_data$Title[weekly_data$newk9==1]))
+main_df$Contents[main_df$Title==unique(weekly_data$Title[weekly_data$newk1==1|weekly_data$newk2==1|weekly_data$newk3==1|weekly_data$newk4==1|weekly_data$newk5==1])]
+
+
+length(unique(monthly_data$Title[monthly_data$key1==1]))
+```
+```{r}
+main_df$Contents[main_df$Title==unique(monthly_data$Title[monthly_data$newk1==1|monthly_data$newk2==1|monthly_data$newk3==1|monthly_data$newk4==1|monthly_data$newk5==1])[c(1:5)]]
+```
+```{r}
+unique(monthly_data$Title[monthly_data$newk1==1|monthly_data$newk2==1|monthly_data$newk3==1|monthly_data$newk4==1|monthly_data$newk5==1])
+```
+```{r}
+unique(newkoa$Title[newkoa$newk1==1|newkoa$newk2==1|newkoa$newk3==1|newkoa$newk4==1|newkoa$newk5==1])
+```
+```{r}
+unique(newkoa[newkoa$newk1==1|newkoa$newk2==1|newkoa$newk3==1|newkoa$newk4==1|newkoa$newk5==1,c("Title","Lines","Provider")])
+```
+
+# Plot bar graph by weekly(May~October) and monthly
+
+```{r}
+# Organize the data by the count of speakers
+newkoa_limg1 <- newkoa_lim%>%group_by(week)%>%filter(person1==1)%>%count(person1)
+names(newkoa_limg1)[2] <- "Speaker"
+newkoa_limg1$Speaker <- as.numeric(newkoa_limg1$Speaker)
+newkoa_limg1$Speaker[newkoa_limg1$Speaker==2] <- 1
+newkoa_limg2 <- newkoa_lim%>%group_by(week)%>%filter(person2==1)%>%count(person2)
+names(newkoa_limg2)[2] <- "Speaker"
+newkoa_limg2$Speaker <- as.numeric(newkoa_limg2$Speaker)
+newkoa_limg2$Speaker[newkoa_limg2$Speaker==2] <- 2
+newkoa_limg3 <- newkoa_lim%>%group_by(week)%>%filter(person3==1)%>%count(person3)
+names(newkoa_limg3)[2] <- "Speaker"
+newkoa_limg3$Speaker <- as.numeric(newkoa_limg3$Speaker)
+newkoa_limg3$Speaker[newkoa_limg3$Speaker==2] <- 3
+newkoa_limg4 <- newkoa_lim%>%group_by(week)%>%filter(person4==1)%>%count(person4)
+names(newkoa_limg4)[2] <- "Speaker"
+newkoa_limg4$Speaker <- as.numeric(newkoa_limg4$Speaker)
+newkoa_limg4$Speaker[newkoa_limg4$Speaker==2] <- 4
+newkoa_limg5 <- newkoa_lim%>%group_by(week)%>%filter(person5==1)%>%count(person5)
+names(newkoa_limg5)[2] <- "Speaker"
+newkoa_limg5$Speaker <- as.numeric(newkoa_limg5$Speaker)
+newkoa_limg5$Speaker[newkoa_limg5$Speaker==2] <- 5
+newkoa_limg6 <- newkoa_lim%>%group_by(week)%>%filter(person6==1)%>%count(person6)
+names(newkoa_limg6)[2] <- "Speaker"
+newkoa_limg6$Speaker <- as.numeric(newkoa_limg6$Speaker)
+newkoa_limg6$Speaker[newkoa_limg6$Speaker==2] <- 6
+newkoa_limg7 <- newkoa_lim%>%group_by(week)%>%filter(person7==1)%>%count(person7)
+names(newkoa_limg7)[2] <- "Speaker"
+newkoa_limg7$Speaker <- as.numeric(newkoa_limg7$Speaker)
+newkoa_limg7$Speaker[newkoa_limg7$Speaker==2] <- 7
+
+newkoa_limg <- rbind(newkoa_limg1,newkoa_limg2)
+newkoa_limg <- rbind(newkoa_limg,newkoa_limg3)
+newkoa_limg <- rbind(newkoa_limg,newkoa_limg4)
+newkoa_limg <- rbind(newkoa_limg,newkoa_limg5)
+newkoa_limg <- rbind(newkoa_limg,newkoa_limg6)
+newkoa_limg <- rbind(newkoa_limg,newkoa_limg7)
+newkoa_limg$Speaker <- as.character(newkoa_limg$Speaker)
+newkoa_limg$n <- as.numeric(newkoa_limg$n)
+newkoa_limg
+main_limg1 <- newkoa_limg%>%filter(!is.na(n))%>%filter(!is.na(Speaker))%>%filter(!is.na(week))%>%
+  ggplot(aes(x=week,y=n,fill=Speaker))+geom_bar(stat="identity")+
+  ylab("Frequency")+xlab("Week")+
+  scale_fill_discrete(labels=c("KKW","LKO","LMS","HWK","PYS","CHS","KHJ"))+
+  scale_x_date(date_breaks = "1 month", date_minor_breaks = "1 week", date_labels = "%Y-%m")+
+  labs(title="Graph of articles that mentioned Newcore at least in one line",
+       caption="Figure: Bar graph by suspected speaker from May 1st to October 31th")+
+  theme_classic()
+
+main_limg1
+
+```
+
+```{r}
+# Organize the data by the count of speakers
+
+newkoa_g1 <- newkoa%>%group_by(monthly)%>%filter(person1==1)%>%count(person1)
+names(newkoa_g1)[2] <- "Speaker"
+newkoa_g1$Speaker <- as.numeric(newkoa_g1$Speaker)
+newkoa_g1$Speaker[newkoa_g1$Speaker==2] <- 1
+newkoa_g2 <- newkoa%>%group_by(monthly)%>%filter(person2==1)%>%count(person2)
+names(newkoa_g2)[2] <- "Speaker"
+newkoa_g2$Speaker <- as.numeric(newkoa_g2$Speaker)
+newkoa_g2$Speaker[newkoa_g2$Speaker==2] <- 2
+newkoa_g3 <- newkoa%>%group_by(monthly)%>%filter(person3==1)%>%count(person3)
+names(newkoa_g3)[2] <- "Speaker"
+newkoa_g3$Speaker <- as.numeric(newkoa_g3$Speaker)
+newkoa_g3$Speaker[newkoa_g3$Speaker==2] <- 3
+newkoa_g4 <- newkoa%>%group_by(monthly)%>%filter(person4==1)%>%count(person4)
+names(newkoa_g4)[2] <- "Speaker"
+newkoa_g4$Speaker <- as.numeric(newkoa_g4$Speaker)
+newkoa_g4$Speaker[newkoa_g4$Speaker==2] <- 4
+newkoa_g5 <- newkoa%>%group_by(monthly)%>%filter(person5==1)%>%count(person5)
+names(newkoa_g5)[2] <- "Speaker"
+newkoa_g5$Speaker <- as.numeric(newkoa_g5$Speaker)
+newkoa_g5$Speaker[newkoa_g5$Speaker==2] <- 5
+newkoa_g6 <- newkoa%>%group_by(monthly)%>%filter(person6==1)%>%count(person6)
+names(newkoa_g6)[2] <- "Speaker"
+newkoa_g6$Speaker <- as.numeric(newkoa_g6$Speaker)
+newkoa_g6$Speaker[newkoa_g6$Speaker==2] <- 6
+newkoa_g7 <- newkoa%>%group_by(monthly)%>%filter(person7==1)%>%count(person7)
+names(newkoa_g7)[2] <- "Speaker"
+newkoa_g7$Speaker <- as.numeric(newkoa_g7$Speaker)
+newkoa_g7$Speaker[newkoa_g7$Speaker==2] <- 7
+
+newkoa_g <- rbind(newkoa_g1,newkoa_g2)
+newkoa_g <- rbind(newkoa_g,newkoa_g3)
+newkoa_g <- rbind(newkoa_g,newkoa_g4)
+newkoa_g <- rbind(newkoa_g,newkoa_g5)
+newkoa_g <- rbind(newkoa_g,newkoa_g6)
+newkoa_g <- rbind(newkoa_g,newkoa_g7)
+newkoa_g$Speaker <- as.character(newkoa_g$Speaker)
+newkoa_g$n <- as.numeric(newkoa_g$n)
+class(newkoa_g$monthly)
+
+main_g1 <- newkoa_g%>%filter(!is.na(n))%>%filter(!is.na(Speaker))%>%filter(!is.na(monthly))%>%
+  ggplot(aes(x=monthly,y=n,fill=Speaker))+geom_bar(stat="identity")+
+  ylab("Frequency")+xlab("Month")+
+  scale_fill_discrete(labels=c("KKW","LKO","LMS","HWK","PYS","CHS","KHJ"))+
+  labs(title="Graph of articles that mentioned Newcore at least in one line",
+       caption="Figure: Bar graph by suspected speaker for year 2007")+
+  theme_classic() #ggthemes::theme_stata()
+main_g1
+```
+
+```{r}
+# newkoa[newkoa$newk1==1|newkoa$newk2==1|newkoa$newk3==1|newkoa$newk4==1|newkoa$newk5==1,]
+# newkoa_lim[newkoa_lim$newk1==1|newkoa_lim$newk2==1|newkoa_lim$newk3==1|newkoa_lim$newk4==1|newkoa_lim$newk5==1,]
+
+# Organize the data by the count of speakers
+newkoa_limg1 <- newkoa_lim[newkoa_lim$newk1==1|newkoa_lim$newk2==1|newkoa_lim$newk3==1|newkoa_lim$newk4==1|newkoa_lim$newk5==1,]%>%
+  group_by(week)%>%filter(person1==1)%>%count(person1)
+names(newkoa_limg1)[2] <- "Speaker"
+newkoa_limg1$Speaker <- as.numeric(newkoa_limg1$Speaker)
+newkoa_limg1$Speaker[newkoa_limg1$Speaker==2] <- 1
+newkoa_limg2 <- newkoa_lim[newkoa_lim$newk1==1|newkoa_lim$newk2==1|newkoa_lim$newk3==1|newkoa_lim$newk4==1|newkoa_lim$newk5==1,]%>%
+  group_by(week)%>%filter(person2==1)%>%count(person2)
+names(newkoa_limg2)[2] <- "Speaker"
+newkoa_limg2$Speaker <- as.numeric(newkoa_limg2$Speaker)
+newkoa_limg2$Speaker[newkoa_limg2$Speaker==2] <- 2
+newkoa_limg3 <- newkoa_lim[newkoa_lim$newk1==1|newkoa_lim$newk2==1|newkoa_lim$newk3==1|newkoa_lim$newk4==1|newkoa_lim$newk5==1,]%>%
+  group_by(week)%>%filter(person3==1)%>%count(person3)
+names(newkoa_limg3)[2] <- "Speaker"
+newkoa_limg3$Speaker <- as.numeric(newkoa_limg3$Speaker)
+newkoa_limg3$Speaker[newkoa_limg3$Speaker==2] <- 3
+newkoa_limg4 <- newkoa_lim[newkoa_lim$newk1==1|newkoa_lim$newk2==1|newkoa_lim$newk3==1|newkoa_lim$newk4==1|newkoa_lim$newk5==1,]%>%
+  group_by(week)%>%filter(person4==1)%>%count(person4)
+names(newkoa_limg4)[2] <- "Speaker"
+newkoa_limg4$Speaker <- as.numeric(newkoa_limg4$Speaker)
+newkoa_limg4$Speaker[newkoa_limg4$Speaker==2] <- 4
+newkoa_limg5 <- newkoa_lim[newkoa_lim$newk1==1|newkoa_lim$newk2==1|newkoa_lim$newk3==1|newkoa_lim$newk4==1|newkoa_lim$newk5==1,]%>%
+  group_by(week)%>%filter(person5==1)%>%count(person5)
+names(newkoa_limg5)[2] <- "Speaker"
+newkoa_limg5$Speaker <- as.numeric(newkoa_limg5$Speaker)
+newkoa_limg5$Speaker[newkoa_limg5$Speaker==2] <- 5
+newkoa_limg6 <- newkoa_lim[newkoa_lim$newk1==1|newkoa_lim$newk2==1|newkoa_lim$newk3==1|newkoa_lim$newk4==1|newkoa_lim$newk5==1,]%>%
+  group_by(week)%>%filter(person6==1)%>%count(person6)
+names(newkoa_limg6)[2] <- "Speaker"
+newkoa_limg6$Speaker <- as.numeric(newkoa_limg6$Speaker)
+newkoa_limg6$Speaker[newkoa_limg6$Speaker==2] <- 6
+newkoa_limg7 <- newkoa_lim[newkoa_lim$newk1==1|newkoa_lim$newk2==1|newkoa_lim$newk3==1|newkoa_lim$newk4==1|newkoa_lim$newk5==1,]%>%
+  group_by(week)%>%filter(person7==1)%>%count(person7)
+names(newkoa_limg7)[2] <- "Speaker"
+newkoa_limg7$Speaker <- as.numeric(newkoa_limg7$Speaker)
+newkoa_limg7$Speaker[newkoa_limg7$Speaker==2] <- 7
+
+newkoa_limg <- rbind(newkoa_limg1,newkoa_limg2)
+newkoa_limg <- rbind(newkoa_limg,newkoa_limg3)
+newkoa_limg <- rbind(newkoa_limg,newkoa_limg4)
+newkoa_limg <- rbind(newkoa_limg,newkoa_limg5)
+newkoa_limg <- rbind(newkoa_limg,newkoa_limg6)
+newkoa_limg <- rbind(newkoa_limg,newkoa_limg7)
+newkoa_limg$Speaker <- as.character(newkoa_limg$Speaker)
+newkoa_limg$n <- as.numeric(newkoa_limg$n)
+
+main_limg2 <- newkoa_limg%>%filter(!is.na(n))%>%filter(!is.na(Speaker))%>%filter(!is.na(week))%>%
+  ggplot(aes(x=as.Date(week),y=n,fill=Speaker))+geom_bar(stat="identity")+
+  ylab("Frequency")+xlab("Week")+
+  scale_fill_discrete(labels=c("KKW","LMS","LKO","HYK","PYS","KHJ","CHS"))+
+  scale_x_date(date_breaks = "1 month", date_minor_breaks = "1 week", date_labels = "%Y-%m")+
+  scale_y_continuous(breaks = c(0,1))+
+  labs(title="Graph of articles that mentioned 'Reassignment' at least in one line",
+       caption="Figure: Bar graph by suspected speaker from May 1st to October 31th with keyword 'Reassignment'")+
+  theme_classic()
+help("scale_y_continuous")
+main_limg2
+
+```
+
+```{r}
+# Organize the data by the count of speakers
+newkoa_g1 <- newkoa[newkoa$newk1==1|newkoa$newk2==1|newkoa$newk3==1|newkoa$newk4==1|newkoa$newk5==1,]%>%
+  group_by(monthly)%>%filter(person1==1)%>%count(person1)
+names(newkoa_g1)[2] <- "Speaker"
+newkoa_g1$Speaker <- as.numeric(newkoa_g1$Speaker)
+newkoa_g1$Speaker[newkoa_g1$Speaker==2] <- 1
+newkoa_g2 <- newkoa[newkoa$newk1==1|newkoa$newk2==1|newkoa$newk3==1|newkoa$newk4==1|newkoa$newk5==1,]%>%
+  group_by(monthly)%>%filter(person2==1)%>%count(person2)
+names(newkoa_g2)[2] <- "Speaker"
+newkoa_g2$Speaker <- as.numeric(newkoa_g2$Speaker)
+newkoa_g2$Speaker[newkoa_g2$Speaker==2] <- 2
+newkoa_g3 <- newkoa[newkoa$newk1==1|newkoa$newk2==1|newkoa$newk3==1|newkoa$newk4==1|newkoa$newk5==1,]%>%
+  group_by(monthly)%>%filter(person3==1)%>%count(person3)
+names(newkoa_g3)[2] <- "Speaker"
+newkoa_g3$Speaker <- as.numeric(newkoa_g3$Speaker)
+newkoa_g3$Speaker[newkoa_g3$Speaker==2] <- 3
+newkoa_g4 <- newkoa[newkoa$newk1==1|newkoa$newk2==1|newkoa$newk3==1|newkoa$newk4==1|newkoa$newk5==1,]%>%
+  group_by(monthly)%>%filter(person4==1)%>%count(person4)
+names(newkoa_g4)[2] <- "Speaker"
+newkoa_g4$Speaker <- as.numeric(newkoa_g4$Speaker)
+newkoa_g4$Speaker[newkoa_g4$Speaker==2] <- 4
+newkoa_g5 <- newkoa[newkoa$newk1==1|newkoa$newk2==1|newkoa$newk3==1|newkoa$newk4==1|newkoa$newk5==1,]%>%
+  group_by(monthly)%>%filter(person5==1)%>%count(person5)
+names(newkoa_g5)[2] <- "Speaker"
+newkoa_g5$Speaker <- as.numeric(newkoa_g5$Speaker)
+newkoa_g5$Speaker[newkoa_g5$Speaker==2] <- 5
+newkoa_g6 <- newkoa[newkoa$newk1==1|newkoa$newk2==1|newkoa$newk3==1|newkoa$newk4==1|newkoa$newk5==1,]%>%
+  group_by(monthly)%>%filter(person6==1)%>%count(person6)
+names(newkoa_g6)[2] <- "Speaker"
+newkoa_g6$Speaker <- as.numeric(newkoa_g6$Speaker)
+newkoa_g6$Speaker[newkoa_g6$Speaker==2] <- 6
+newkoa_g7 <- newkoa[newkoa$newk1==1|newkoa$newk2==1|newkoa$newk3==1|newkoa$newk4==1|newkoa$newk5==1,]%>%
+  group_by(monthly)%>%filter(person7==1)%>%count(person7)
+names(newkoa_g7)[2] <- "Speaker"
+newkoa_g7$Speaker <- as.numeric(newkoa_g7$Speaker)
+newkoa_g7$Speaker[newkoa_g7$Speaker==2] <- 7
+
+newkoa_g <- rbind(newkoa_g1,newkoa_g2)
+newkoa_g <- rbind(newkoa_g,newkoa_g3)
+newkoa_g <- rbind(newkoa_g,newkoa_g4)
+newkoa_g <- rbind(newkoa_g,newkoa_g5)
+newkoa_g <- rbind(newkoa_g,newkoa_g6)
+newkoa_g <- rbind(newkoa_g,newkoa_g7)
+newkoa_g$Speaker <- as.character(newkoa_g$Speaker)
+newkoa_g$n <- as.numeric(newkoa_g$n)
+
+main_g2 <- newkoa_g%>%filter(!is.na(n))%>%filter(!is.na(Speaker))%>%filter(!is.na(monthly))%>%
+  ggplot(aes(x=monthly,y=n,fill=Speaker))+geom_bar(stat="identity")+
+  ylab("Frequency")+xlab("Month")+
+  scale_fill_discrete(labels=c("KKW","LMS","LKO","HYK","PYS","KHJ","CHS"))+
+  labs(title="",
+       caption="Figure: Bar graph by suspected speaker for year 2007 with keyword 'Reassignment'")+
+  theme_classic()
+
+main_g2
+
+```
+```{r}
+# Organize the data by the count of speakers
+newkoa_limg1 <- newkoa_lim[newkoa_lim$newk9==1,]%>%
+  group_by(week)%>%filter(person1==1)%>%count(person1)
+names(newkoa_limg1)[2] <- "Speaker"
+newkoa_limg1$Speaker <- as.numeric(newkoa_limg1$Speaker)
+newkoa_limg1$Speaker[newkoa_limg1$Speaker==2] <- 1
+newkoa_limg2 <- newkoa_lim[newkoa_lim$newk9==1,]%>%
+  group_by(week)%>%filter(person2==1)%>%count(person2)
+names(newkoa_limg2)[2] <- "Speaker"
+newkoa_limg2$Speaker <- as.numeric(newkoa_limg2$Speaker)
+newkoa_limg2$Speaker[newkoa_limg2$Speaker==2] <- 2
+newkoa_limg3 <- newkoa_lim[newkoa_lim$newk9==1,]%>%
+  group_by(week)%>%filter(person3==1)%>%count(person3)
+names(newkoa_limg3)[2] <- "Speaker"
+newkoa_limg3$Speaker <- as.numeric(newkoa_limg3$Speaker)
+newkoa_limg3$Speaker[newkoa_limg3$Speaker==2] <- 3
+newkoa_limg4 <- newkoa_lim[newkoa_lim$newk9==1,]%>%
+  group_by(week)%>%filter(person4==1)%>%count(person4)
+names(newkoa_limg4)[2] <- "Speaker"
+newkoa_limg4$Speaker <- as.numeric(newkoa_limg4$Speaker)
+newkoa_limg4$Speaker[newkoa_limg4$Speaker==2] <- 4
+newkoa_limg5 <- newkoa_lim[newkoa_lim$newk9==1,]%>%
+  group_by(week)%>%filter(person5==1)%>%count(person5)
+names(newkoa_limg5)[2] <- "Speaker"
+newkoa_limg5$Speaker <- as.numeric(newkoa_limg5$Speaker)
+newkoa_limg5$Speaker[newkoa_limg5$Speaker==2] <- 5
+newkoa_limg6 <- newkoa_lim[newkoa_lim$newk9==1,]%>%
+  group_by(week)%>%filter(person6==1)%>%count(person6)
+names(newkoa_limg6)[2] <- "Speaker"
+newkoa_limg6$Speaker <- as.numeric(newkoa_limg6$Speaker)
+newkoa_limg6$Speaker[newkoa_limg6$Speaker==2] <- 6
+newkoa_limg7 <- newkoa_lim[newkoa_lim$newk9==1,]%>%
+  group_by(week)%>%filter(person7==1)%>%count(person7)
+names(newkoa_limg7)[2] <- "Speaker"
+newkoa_limg7$Speaker <- as.numeric(newkoa_limg7$Speaker)
+newkoa_limg7$Speaker[newkoa_limg7$Speaker==2] <- 7
+
+newkoa_limg <- rbind(newkoa_limg1,newkoa_limg2)
+newkoa_limg <- rbind(newkoa_limg,newkoa_limg3)
+newkoa_limg <- rbind(newkoa_limg,newkoa_limg4)
+newkoa_limg <- rbind(newkoa_limg,newkoa_limg5)
+newkoa_limg <- rbind(newkoa_limg,newkoa_limg6)
+newkoa_limg <- rbind(newkoa_limg,newkoa_limg7)
+newkoa_limg$Speaker <- as.character(newkoa_limg$Speaker)
+newkoa_limg$n <- as.numeric(newkoa_limg$n)
+
+main_limg3 <- newkoa_limg%>%filter(!is.na(n))%>%filter(!is.na(Speaker))%>%filter(!is.na(week))%>%
+  ggplot(aes(x=as.Date(week),y=n,fill=Speaker))+geom_bar(stat="identity")+
+  ylab("Frequency")+xlab("Week")+
+  scale_fill_discrete(labels=c("KKW","LMS","LKO","HYK","PYS","KHJ","CHS"))+
+  scale_x_date(date_breaks = "1 month", date_minor_breaks = "1 week", date_labels = "%Y-%m")+
+  labs(title="",
+       caption="Figure: Bar graph by suspected speaker from May 1st to October 31th with keyword 'Unofficial Job'")+
+  theme_classic()
+
+main_limg3
+
+```
+
+```{r}
+# Organize the data by the count of speakers
+newkoa_g1 <- newkoa[newkoa$newk9==1,]%>%
+  group_by(monthly)%>%filter(person1==1)%>%count(person1)
+names(newkoa_g1)[2] <- "Speaker"
+newkoa_g1$Speaker <- as.numeric(newkoa_g1$Speaker)
+newkoa_g1$Speaker[newkoa_g1$Speaker==2] <- 1
+newkoa_g2 <- newkoa[newkoa$newk9==1,]%>%
+  group_by(monthly)%>%filter(person2==1)%>%count(person2)
+names(newkoa_g2)[2] <- "Speaker"
+newkoa_g2$Speaker <- as.numeric(newkoa_g2$Speaker)
+newkoa_g2$Speaker[newkoa_g2$Speaker==2] <- 2
+newkoa_g3 <- newkoa[newkoa$newk9==1,]%>%
+  group_by(monthly)%>%filter(person3==1)%>%count(person3)
+names(newkoa_g3)[2] <- "Speaker"
+newkoa_g3$Speaker <- as.numeric(newkoa_g3$Speaker)
+newkoa_g3$Speaker[newkoa_g3$Speaker==2] <- 3
+newkoa_g4 <- newkoa[newkoa$newk9==1,]%>%
+  group_by(monthly)%>%filter(person4==1)%>%count(person4)
+names(newkoa_g4)[2] <- "Speaker"
+newkoa_g4$Speaker <- as.numeric(newkoa_g4$Speaker)
+newkoa_g4$Speaker[newkoa_g4$Speaker==2] <- 4
+newkoa_g5 <- newkoa[newkoa$newk9==1,]%>%
+  group_by(monthly)%>%filter(person5==1)%>%count(person5)
+names(newkoa_g5)[2] <- "Speaker"
+newkoa_g5$Speaker <- as.numeric(newkoa_g5$Speaker)
+newkoa_g5$Speaker[newkoa_g5$Speaker==2] <- 5
+newkoa_g6 <- newkoa[newkoa$newk9==1,]%>%
+  group_by(monthly)%>%filter(person6==1)%>%count(person6)
+names(newkoa_g6)[2] <- "Speaker"
+newkoa_g6$Speaker <- as.numeric(newkoa_g6$Speaker)
+newkoa_g6$Speaker[newkoa_g6$Speaker==2] <- 6
+newkoa_g7 <- newkoa[newkoa$newk9==1,]%>%
+  group_by(monthly)%>%filter(person7==1)%>%count(person7)
+names(newkoa_g7)[2] <- "Speaker"
+newkoa_g7$Speaker <- as.numeric(newkoa_g7$Speaker)
+newkoa_g7$Speaker[newkoa_g7$Speaker==2] <- 7
+
+newkoa_g <- rbind(newkoa_g1,newkoa_g2)
+newkoa_g <- rbind(newkoa_g,newkoa_g3)
+newkoa_g <- rbind(newkoa_g,newkoa_g4)
+newkoa_g <- rbind(newkoa_g,newkoa_g5)
+newkoa_g <- rbind(newkoa_g,newkoa_g6)
+newkoa_g <- rbind(newkoa_g,newkoa_g7)
+newkoa_g$Speaker <- as.character(newkoa_g$Speaker)
+newkoa_g$n <- as.numeric(newkoa_g$n)
+
+main_g3 <- newkoa_g%>%filter(!is.na(n))%>%filter(!is.na(Speaker))%>%filter(!is.na(monthly))%>%
+  ggplot(aes(x=monthly,y=n,fill=Speaker))+geom_bar(stat="identity")+
+  ylab("Frequency")+xlab("Month")+
+  scale_fill_discrete(labels=c("KKW","LMS","LKO","HYK","PYS","KHJ","CHS"))+
+  labs(title="",
+       caption="Figure: Bar graph by suspected speaker for year 2007 with keyword 'Unofficial Job'")+
+  theme_classic()
+main_g3
+```
+
+```{r}
+graph_data <- target_df1%>%group_by(monthly,weekly,key1,key2)%>%count(monthly)
+#graph_data$Dates <-as.Date(graph_data$Dates)
+names(graph_data)[c(3,4)] <- c("Eland","Newcoa")
+levels(graph_data$Eland) <- c("No","Yes")
+levels(graph_data$Newcoa) <- c("No","Yes")
+class(graph_data$Eland)
+
+eland_g <- graph_data%>%ggplot(aes(x=monthly,y=n,fill=Eland))+
+  geom_bar(stat = "identity",position = "stack")+
+  scale_x_yearmon(format = "%Y-%m")+
+  ylab("Frequency")+
+  xlab("Month")+
+  labs(title="Frequency Table of E-land")+
+  theme_classic()
+newcoa_g <- graph_data%>%ggplot(aes(x=monthly,y=n,fill=Newcoa))+
+  geom_bar(stat = "identity",position = "stack")+
+  scale_x_yearmon(format = "%Y-%m")+
+  ylab("Frequency")+
+  xlab("Month")+
+  labs(title="Frequency Table of Newcore")+
+  theme_classic()
+
+
+eland_limg <- graph_data[graph_data$monthly>="2007-05-01"&graph_data$monthly<="2007-10-31",]%>%
+  ggplot(aes(x=as.Date(weekly),y=n,fill=Eland))+
+  geom_bar(stat = "identity",position = "stack")+
+  scale_x_date(date_breaks = "1 month", date_minor_breaks = "1 week", date_labels = "%Y-%m")+
+  ylab("Frequency")+
+  xlab("Week")+
+  labs(title="Frequency Table of E-land")+
+  theme_classic()
+
+newcoa_limg <-graph_data[graph_data$monthly>="2007-05-01"&graph_data$monthly<="2007-10-31",]%>%
+  ggplot(aes(x=as.Date(weekly),y=n,fill=Newcoa))+
+  geom_bar(stat = "identity",position = "stack")+
+  scale_x_date(date_breaks = "1 month", date_minor_breaks = "1 week", date_labels = "%Y-%m")+
+  ylab("Frequency")+
+  xlab("Week")+
+  labs(title="Frequency Table of Newcore")+
+  theme_classic()
+
+eland_g;newcoa_g;eland_limg;newcoa_limg
+```
+
+
+

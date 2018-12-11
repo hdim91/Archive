@@ -1,0 +1,179 @@
+---
+title: "JoongAng and Dongah"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+# Crawling & Data Cleaning packages
+library(dplyr)
+library(httr)
+library(XML)
+library(rvest)
+library(xlsx)
+library(readxl)
+```
+
+
+```{r}
+dongah_rank <- seq(1,259,15) # set the list of all pages
+dongah_url1 <- "http://news.donga.com/search?p="
+dongah_url2 <- "&query=%EC%9D%B4%EB%9E%9C%EB%93%9C&check_news=1&more=1&sorting=2&search_date=5&v1=20060101&v2=20081231&range=1"
+dongah_xpath1 <- '//*[@id="contents"]/div[3]/div[1]/div[' # xpath for reading the title text of dongah webpage
+dongah_xpath2 <- ']/div[2]/p[1]/a'
+dongah_xpath <- c() # Blank list for xpaths
+for(i in 1:15){ # Create xpath for targeting texts
+  dongah_xpath[i] <- paste0(dongah_xpath1,i,dongah_xpath2)
+}
+dongah_url <- c()  # Create urls for targeted pages
+for(i in 1:length(dongah_rank)){
+  dongah_url[i] <- paste0(dongah_url1,dongah_rank[i],dongah_url2)
+}
+dong_href <- c() # Blank list of href of articles
+for(i in 1:length(dongah_url)){
+  dong_web_ <- GET(dongah_url[i]) # Call html from saved urls
+  dong_txt <- read_html(dong_web_) # Parse html
+  link <- html_nodes(dong_txt, "div.searchCont a") # Collect all html texts that contain targeted hrefs
+  dong_href <- c(dong_href, unique(html_attr(link,"href"))) # Obtain href
+}
+```
+
+```{r}
+options(timeout= 4000000)  # Expand time limit 
+
+dong_df <- data_frame(url = dong_href,Title=NA,Content=NA)
+
+for(i in 1:length(dong_href)){
+  dnews_html <- read_html(dong_href[i])
+  closeAllConnections()
+  dong_df$Title[dong_df$url==dong_href[i]] <- try(html_text(html_nodes(dnews_html,"div.article_title h2.title")))
+  dong_df$Content[dong_df$url==dong_href[i]] <- try(html_text(html_nodes(dnews_html,"div.article_txt")))
+  dong_df$Dates[dong_df$url==dong_href[i]] <- substring(try(html_text(html_nodes(dnews_html,"div.title_foot span.date01")))[1],4,13)
+}
+
+write.xlsx(dong_df,"Dongah_이랜드.xlsx")
+```
+```{r}
+# ?猷??釉? - ?⑤벏?떮癰??
+dongnew_url <- 'http://news.donga.com/search?check_news=1&more=&sorting=&range=&search_date=&search_date=5&v1=20060101&v2=20081231&query=%EC%9D%B4%EB%9E%9C%EB%93%9C+%EB%89%B4%EC%BD%94%EC%95%84+%EA%B3%B5%EB%8F%99%ED%88%AC%EC%9F%81%EB%B3%B8%EB%B6%80'
+
+dongah_xpath1 <- '//*[@id="contents"]/div[3]/div[1]/div['
+dongah_xpath2 <- ']/div[2]/p[1]/a'
+dongah_xpath <- c()
+for(i in 1:5){
+  dongah_xpath[i] <- paste0(dongah_xpath1,i,dongah_xpath2)
+}
+dongah_url <- c()
+
+dong_href <- c()
+for(i in 1:length(dongnew_url)){
+  dong_web_ <- GET(dongnew_url[i])
+  Sys.sleep(runif(1,1,10))
+  dong_txt <- read_html(dong_web_)
+  link <- html_nodes(dong_txt, "div.searchCont a")
+  dong_href <- c(dong_href, unique(html_attr(link,"href")))
+}
+
+options(timeout= 4000000)
+dnews_url <- dong_href[1]
+dnews_html <- read_html(dnews_url)
+
+dong_df <- data_frame(url = dong_href,Title=NA,Content=NA,Dates=NA)
+for(i in 1:length(dong_href)){
+  dnews_html <- read_html(dong_href[i])
+  closeAllConnections()
+  dong_df$Title[dong_df$url==dong_href[i]] <- try(html_text(html_nodes(dnews_html,"div.article_title h2.title")))
+  dong_df$Content[dong_df$url==dong_href[i]] <- try(html_text(html_nodes(dnews_html,"div.article_txt")))
+  dong_df$Dates[dong_df$url==dong_href[i]] <- substring(try(html_text(html_nodes(dnews_html,"div.title_foot span.date01")))[1],4,13)
+}
+write.xlsx(dong_df,"Dongah_怨듬룞?닾.xlsx")
+```
+
+
+```{r}
+# 餓λ쵐釉???뵬癰?? - ??뵠??삏?諭?
+jo_url1 <- "https://search.joins.com/TotalNews?page="
+jo_url2 <- "&Keyword=%EC%9D%B4%EB%9E%9C%EB%93%9C&PeriodType=DirectInput&StartSearchDate=01%2F01%2F2006%2000%3A00%3A00&EndSearchDate=12%2F31%2F2008%2000%3A00%3A00&SortType=New&SourceGroupType=Joongang&SearchCategoryType=TotalNews"
+
+jo_url <- c()
+for(i in 1:16){
+  jo_url[i] <- paste0(jo_url1,i,jo_url2)
+}
+```
+
+```{r}
+jo_href <- c()
+for(i in 1:length(jo_url)){
+  jo_web <- GET(jo_url[i])
+  jo_txt <- read_html(jo_web)
+  link <- html_nodes(jo_txt, "strong.headline a")
+  jo_href <- c(jo_href, unique(html_attr(link,"href")))
+  Sys.sleep(runif(1,1,10))
+}
+```
+```{r}
+options(timeout = 4000000)
+jo_df <- data_frame(url = jo_href, Title=NA,Content = NA, Dates=NA)
+for(i in 1:length(jo_href)){
+  jnews_html <- read_html(jo_href[i])
+  Sys.sleep(runif(1,1,10))
+  jo_df$Title[jo_df$url==jo_href[i]] <- try(html_text(html_nodes(jnews_html,"div.subject h1.headline")))
+  jo_df$Content[jo_df$url==jo_href[i]] <- try(html_text(html_nodes(jnews_html,"div.article_body")))
+  jo_df$Dates[jo_df$url==jo_href[i]] <- substring(try(html_text(html_nodes(jnews_html,"div.byline em")))[2],4,13)
+}
+
+write.xlsx(jo_df,"JoonAng_?씠?옖?뱶.xlsx")
+```
+
+```{r}
+
+jonew_url <- "https://search.joins.com/JoongangNews?StartSearchDate=2006.01.01&EndSearchDate=2008.12.31&Keyword=%EC%9D%B4%EB%9E%9C%EB%93%9C+%EA%B3%B5%EB%8F%99%ED%88%AC%EC%9F%81%EB%B3%B8%EB%B6%80&SortType=New&SearchCategoryType=JoongangNews&PeriodType=DirectInput&ScopeType=All&ServiceCode=&SourceGroupType=&ReporterCode=&ImageType=All&JplusType=All&BlogType=All&ImageSearchType=Image&MatchKeyword=&IncludeKeyword=&ExcluedeKeyword="
+jonew_href <- unique(GET(jonew_url)%>%read_html()%>%html_nodes("strong.headline a")%>%html_attr("href"))
+
+jonew_df <- data_frame(url=jonew_href,Title=NA,Content=NA)
+
+jonew_html <- read_html(jonew_href[1])
+jonew_title <- try(html_text(html_nodes(jonew_html,"div.subject h1.headline")))
+jonew_content <-  try(html_text(html_nodes(jonew_html,"div.article_body")))
+jonew_dates <- substring(try(html_text(html_nodes(jonew_html,"div.byline em")))[2],4,13)
+jonew_dates
+jonew_df$Title <- jonew_title
+jonew_df$Content <- jonew_content
+jonew_df$Dates <- jonew_dates
+write.xlsx(jonew_df,"Joongang_?씠?옖?뱶+怨듬룞?닾?웳蹂몃?.xlsx")
+```
+
+
+```{r}
+setwd("C:\\Users\\imhyu\\Dropbox\\한바란 교수님")
+dongah_df <- read_excel("Dongah_이랜드.xlsx")
+joonang_df <- read_excel("JoonAng_이랜드.xlsx")
+dongah_df$Provider <- "동아일보"
+joonang_df$Provider <- "중앙일보"
+joonang_df$Dates <- gsub("[.]","-",joonang_df$Dates)
+total_df <- rbind(dongah_df[,-1],joonang_df[,-1])
+write.xlsx(total_df,"동아중앙_이랜드.xlsx")
+
+dong_df <- read_excel("Dongah_new_?⑤벉猷???떮.xlsx")
+gongdong_df <- rbind(dong_df[,-1],jonew_df)
+dong_df$Provider <- "?猷??釉???뵬癰??"
+jonew_df$Provider <- "餓λ쵐釉???뵬癰??"
+write.xlsx(gongdong_df,"?⑤벏?떮癰??_?猷욂빳?.xlsx")
+
+
+```
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,557 @@
+---
+title: "Analysis"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Main Analysis
+
+## Library
+```{r}
+library(tidyverse)
+library(tibble)
+library(readxl)
+library(zoo)
+library(lubridate)
+library(xlsx)
+#library(KoNLP)
+library(foreign)
+library(haven)
+library(extrafont)
+library(gridSVG)
+library(ggthemes)
+library(XLConnect)
+```
+
+## Setting function for multiple plots
+```{r}
+multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
+  library(grid)
+
+  # Make a list from the ... arguments and plotlist
+  plots <- c(list(...), plotlist)
+
+  numPlots = length(plots)
+
+  # If layout is NULL, then use 'cols' to determine layout
+  if (is.null(layout)) {
+    # Make the panel
+    # ncol: Number of columns of plots
+    # nrow: Number of rows needed, calculated from # of cols
+    layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
+                    ncol = cols, nrow = ceiling(numPlots/cols))
+  }
+
+ if (numPlots==1) {
+    print(plots[[1]])
+
+  } else {
+    # Set up the page
+    grid.newpage()
+    pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
+
+    # Make each plot, in the correct location
+    for (i in 1:numPlots) {
+      # Get the i,j matrix positions of the regions that contain this subplot
+      matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+
+      print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
+                                      layout.pos.col = matchidx$col))
+    }
+  }
+}
+```
+
+## Setting personal function for text_matrix
+```{r}
+text_matrix <- function(dat, table_title) {
+
+  rbind(c(table_title, rep('', ncol(dat)-1)), # title
+        rep('', ncol(dat)), # blank spacer row
+        names(dat), # column names
+        unname(sapply(dat, as.character))) # data
+
+}
+
+```
+
+## Data Import
+```{r}
+main_df <- read_excel("main_df.xlsx")
+
+main_df$monthly <- cut(main_df$Dates,breaks = "months")
+main_df$monthly <- as.yearmon(main_df$monthly)
+main_df$cat1 <- as.factor(as.integer(grepl(pattern="노동조합",x=main_df$Contents)))
+main_df$cat2 <- as.factor(as.integer(grepl(pattern="노동 조합",x=main_df$Contents)))
+main_df$cat3 <- as.factor(as.integer(grepl(pattern="노조",x=main_df$Contents)))
+main_df<-main_df[main_df$cat1==1|main_df$cat2==1|main_df$cat3==1,]
+main_df
+```
+
+## Setting variables by keywords
+```{r}
+main_df$key1 <- as.factor(as.integer(grepl(pattern = "이랜드",x=main_df$Contents)))
+main_df$key2 <- as.factor(as.integer(grepl(pattern = "뉴코아",x=main_df$Contents)))
+main_df$key3 <- as.factor(as.integer(grepl(pattern = "노조",x=main_df$Contents)))
+main_df$key4 <- as.factor(as.integer(grepl(pattern = "전환배치",x=main_df$Contents)))
+main_df$key5 <- as.factor(as.integer(grepl(pattern = "공동투쟁본부",x=main_df$Contents)))
+main_df$key6 <- as.factor(as.integer(grepl(pattern = "이랜드 노조",x=main_df$Contents)))
+main_df$key7 <- as.factor(as.integer(grepl(pattern = "뉴코아 노조",x=main_df$Contents)))
+main_df$key8 <- as.factor(as.integer(grepl(pattern = "뉴코아-이랜드",x=main_df$Contents)))
+main_df$key9 <- as.factor(as.integer(grepl(pattern = "이랜드-뉴코아",x=main_df$Contents)))
+main_df$key10 <- as.factor(as.integer(grepl(pattern = "뉴코아 이랜드",x=main_df$Contents)))
+main_df$key11 <- as.factor(as.integer(grepl(pattern = "이랜드 뉴코아",x=main_df$Contents))) 
+```
+
+
+## Setting Variables by Person
+```{r}
+main_df$person1 <- as.factor(as.integer(grepl(pattern = "김경욱",x=main_df$Contents)))
+main_df$person2 <- as.factor(as.integer(grepl(pattern = "이남신",x=main_df$Contents)))
+main_df$person3 <- as.factor(as.integer(grepl(pattern = "이경옥",x=main_df$Contents)))
+main_df$person4 <- as.factor(as.integer(grepl(pattern = "홍윤경",x=main_df$Contents)))
+main_df$person5 <- as.factor(as.integer(grepl(pattern = "박양수",x=main_df$Contents)))
+main_df$person6 <- as.factor(as.integer(grepl(pattern = "김호진",x=main_df$Contents)))
+main_df$person7 <- as.factor(as.integer(grepl(pattern = "최호섭",x=main_df$Contents)))
+```
+
+## Table by keyword
+
+```{r}
+matk1 <- matrix(c(length(main_df$key1[main_df$key1==1]),length(main_df$key2[main_df$key2==1]),
+                length(main_df$key3[main_df$key3==1]),length(main_df$key4[main_df$key4==1]),
+                length(main_df$key5[main_df$key5==1])),ncol = 5)
+colnames(matk1) <- c("이랜드","뉴코아","노조","전환배치","공동투쟁본부")
+matk1
+matk1 <- as.data.frame(matk1)
+matk1 <- text_matrix(matk1, table_title = "Table1 - Number of articles that contain keywords in their contents")
+write.xlsx(matk1,"Main_Analysis-Part1_tables and graphs\\Table1.xlsx",
+           col.names = FALSE, row.names = FALSE)
+```
+
+```{r}
+mat1 <- matrix(c(length(main_df$key6[main_df$key6==1]),length(main_df$key7[main_df$key7==1])),ncol = 2)
+colnames(mat1) <- c("이랜드 노조","뉴코아 노조")
+mat1 <- as.data.frame(mat1)
+mat1 <- text_matrix(mat1,table_title = "Table2 - Table of combinations of keywords given different orders")
+write.xlsx(mat1,"Main_Analysis-Part1_tables and graphs\\Table2.xlsx",
+           col.names = FALSE,row.names = FALSE)
+mat2 <- matrix(c(length(main_df$key8[main_df$key8==1]),length(main_df$key9[main_df$key9==1])),ncol = 2)
+colnames(mat2) <- c("뉴코아-이랜드","이랜드-뉴코아")
+write.xlsx(mat2,"Main_Analysis-Part1_tables and graphs\\Table2.xlsx",
+           col.names = TRUE,row.names = FALSE,append = TRUE,sheetName = "2")
+mat3 <- matrix(c(length(main_df$key10[main_df$key10==1]),length(main_df$key11[main_df$key11==1])), ncol = 2)
+colnames(mat3) <-c("뉴코아 이랜드","이랜드 뉴코아")
+write.xlsx(mat3,"Main_Analysis-Part1_tables and graphs\\Table2.xlsx",
+           col.names = TRUE,row.names = FALSE,append = TRUE,sheetName = "3")
+
+```
+
+# Table by person
+```{r}
+matp1 <- matrix(c(length(main_df$person1[main_df$person1==1]),length(main_df$person2[main_df$person2==1]),
+                length(main_df$person3[main_df$person3==1]),length(main_df$person4[main_df$person4==1]),
+                length(main_df$person5[main_df$person5==1]),length(main_df$person6[main_df$person6==1]),
+                length(main_df$person7[main_df$person7==1])),ncol = 7)
+colnames(matp1) <- c("김경욱","이경옥","이남신","홍윤경","박양수","최호섭","김호진")
+matp1
+matp1 <- as.data.frame(matp1)
+matp1 <- text_matrix(matp1, table_title="Table3 - Number of articles that mentioned one of following people")
+write.xlsx(matp1,"Main_Analysis-Part1_tables and graphs\\Table3.xlsx",
+           col.names = FALSE, row.names = FALSE)
+```
+
+## Table of Person|Time
+```{r}
+main_df$quarter <- as.yearqtr(main_df$Dates)
+person1time <- main_df%>%group_by(quarter)%>%filter(person1==1)%>%count(person1)
+colnames(person1time)[3] <- "김경욱"
+person2time <- main_df%>%group_by(quarter)%>%filter(person2==1)%>%count(person2)
+colnames(person2time)[3] <- "이경옥"
+person3time <- main_df%>%group_by(quarter)%>%filter(person3==1)%>%count(person3)
+colnames(person3time)[3] <- "이남신"
+person4time <- main_df%>%group_by(quarter)%>%filter(person4==1)%>%count(person4)
+colnames(person4time)[3] <- "홍윤경"
+person5time <- main_df%>%group_by(quarter)%>%filter(person5==1)%>%count(person5)
+colnames(person5time)[3] <- "박양수"
+person6time <- main_df%>%group_by(quarter)%>%filter(person6==1)%>%count(person6)
+colnames(person6time)[3] <- "최호섭"
+person7time <- main_df%>%group_by(quarter)%>%filter(person7==1)%>%count(person7)
+colnames(person7time)[3] <- "김호진"
+persontime <- merge(person1time[,c(1,3)],person2time[,c(1,3)],all = TRUE)
+persontime <- merge(persontime,person3time[,c(1,3)],all=TRUE)
+persontime <- merge(persontime,person4time[,c(1,3)],all=TRUE)
+persontime <- merge(persontime,person5time[,c(1,3)],all=TRUE)
+persontime <- merge(persontime,person6time[,c(1,3)],all=TRUE)
+persontime <- merge(persontime,person7time[,c(1,3)],all=TRUE)
+persontime
+pertontime <- text_matrix(persontime,table_title = "Table4 - Number of articles of person mentioned by quraters")
+write.xlsx(pertontime,"Main_Analysis-Part1_tables and graphs\\Table4.xlsx",
+           col.names = FALSE,row.names = FALSE,showNA = FALSE)
+```
+
+# Table of keywords by person
+```{r}
+p1key <- matrix(c(length(main_df$key1[main_df$person1==1&main_df$key1==1]),
+                  length(main_df$key2[main_df$person1==1&main_df$key2==1]),
+                  length(main_df$key3[main_df$person1==1&main_df$key3==1]),
+                  length(main_df$key4[main_df$person1==1&main_df$key4==1]),
+                  length(main_df$key5[main_df$person1==1&main_df$key5==1])),ncol=5)
+p2key <- matrix(c(length(main_df$key1[main_df$person2==1&main_df$key1==1]),
+                  length(main_df$key2[main_df$person2==1&main_df$key2==1]),
+                  length(main_df$key3[main_df$person2==1&main_df$key3==1]),
+                  length(main_df$key4[main_df$person2==1&main_df$key4==1]),
+                  length(main_df$key5[main_df$person2==1&main_df$key5==1])),ncol=5)
+p3key <- matrix(c(length(main_df$key1[main_df$person3==1&main_df$key1==1]),
+                  length(main_df$key2[main_df$person3==1&main_df$key2==1]),
+                  length(main_df$key3[main_df$person3==1&main_df$key3==1]),
+                  length(main_df$key4[main_df$person3==1&main_df$key4==1]),
+                  length(main_df$key5[main_df$person3==1&main_df$key5==1])),ncol=5)
+p4key <- matrix(c(length(main_df$key1[main_df$person4==1&main_df$key1==1]),
+                  length(main_df$key2[main_df$person4==1&main_df$key2==1]),
+                  length(main_df$key3[main_df$person4==1&main_df$key3==1]),
+                  length(main_df$key4[main_df$person4==1&main_df$key4==1]),
+                  length(main_df$key5[main_df$person4==1&main_df$key5==1])),ncol=5)
+p5key <- matrix(c(length(main_df$key1[main_df$person5==1&main_df$key1==1]),
+                  length(main_df$key2[main_df$person5==1&main_df$key2==1]),
+                  length(main_df$key3[main_df$person5==1&main_df$key3==1]),
+                  length(main_df$key4[main_df$person5==1&main_df$key4==1]),
+                  length(main_df$key5[main_df$person5==1&main_df$key5==1])),ncol=5)
+p6key <- matrix(c(length(main_df$key1[main_df$person6==1&main_df$key1==1]),
+                  length(main_df$key2[main_df$person6==1&main_df$key2==1]),
+                  length(main_df$key3[main_df$person6==1&main_df$key3==1]),
+                  length(main_df$key4[main_df$person6==1&main_df$key4==1]),
+                  length(main_df$key5[main_df$person6==1&main_df$key5==1])),ncol=5)
+p7key <- matrix(c(length(main_df$key1[main_df$person7==1&main_df$key1==1]),
+                  length(main_df$key2[main_df$person7==1&main_df$key2==1]),
+                  length(main_df$key3[main_df$person7==1&main_df$key3==1]),
+                  length(main_df$key4[main_df$person7==1&main_df$key4==1]),
+                  length(main_df$key5[main_df$person7==1&main_df$key5==1])),ncol=5)
+pkey1 <- rbind(p1key,p2key,p3key,p4key,p5key,p6key,p7key)
+rownames(pkey1) <- c("김경욱","이경옥","이남신","홍윤경","박양수","최호섭","김호진")
+colnames(pkey1) <- c("이랜드","뉴코아","노조","전환배치","공동투쟁본부")
+pkey1_df <- as.data.frame(pkey1)
+pkey1_df$Speaker <- c("김경욱","이경옥","이남신","홍윤경","박양수","최호섭","김호진")
+pkey1_df <- pkey1_df[,c(6,1:5)]
+pkey1_df
+pkey1_df <- text_matrix(pkey1_df,table_title = "Table5 - The Number of articles mentioning each keyword and person ")
+write.xlsx(pkey1_df,"Main_Analysis-Part1_tables and graphs\\Table5.xlsx",
+           col.names = FALSE, row.names = FALSE)
+```
+```{r}
+p1key2 <- matrix(c(length(main_df$key6[main_df$person1==1&main_df$key6==1]),
+                  length(main_df$key7[main_df$person1==1&main_df$key7==1]),
+                  length(main_df$key8[main_df$person1==1&main_df$key8==1]),
+                  length(main_df$key9[main_df$person1==1&main_df$key9==1]),
+                  length(main_df$key10[main_df$person1==1&main_df$key10==1]),
+                  length(main_df$key11[main_df$person1==1&main_df$key11==1])),ncol=6)
+p2key2 <- matrix(c(length(main_df$key6[main_df$person2==1&main_df$key6==1]),
+                  length(main_df$key7[main_df$person2==1&main_df$key7==1]),
+                  length(main_df$key8[main_df$person2==1&main_df$key8==1]),
+                  length(main_df$key9[main_df$person2==1&main_df$key9==1]),
+                  length(main_df$key10[main_df$person2==1&main_df$key10==1]),
+                  length(main_df$key11[main_df$person2==1&main_df$key11==1])),ncol=6)
+p3key2 <- matrix(c(length(main_df$key6[main_df$person3==1&main_df$key6==1]),
+                  length(main_df$key7[main_df$person3==1&main_df$key7==1]),
+                  length(main_df$key8[main_df$person3==1&main_df$key8==1]),
+                  length(main_df$key9[main_df$person3==1&main_df$key9==1]),
+                  length(main_df$key10[main_df$person3==1&main_df$key10==1]),
+                  length(main_df$key11[main_df$person3==1&main_df$key11==1])),ncol=6)
+p4key2 <- matrix(c(length(main_df$key6[main_df$person4==1&main_df$key6==1]),
+                  length(main_df$key7[main_df$person4==1&main_df$key7==1]),
+                  length(main_df$key8[main_df$person4==1&main_df$key8==1]),
+                  length(main_df$key9[main_df$person4==1&main_df$key9==1]),
+                  length(main_df$key10[main_df$person4==1&main_df$key10==1]),
+                  length(main_df$key11[main_df$person4==1&main_df$key11==1])),ncol=6)
+p5key2 <- matrix(c(length(main_df$key6[main_df$person5==1&main_df$key6==1]),
+                  length(main_df$key7[main_df$person5==1&main_df$key7==1]),
+                  length(main_df$key8[main_df$person5==1&main_df$key8==1]),
+                  length(main_df$key9[main_df$person5==1&main_df$key9==1]),
+                  length(main_df$key10[main_df$person5==1&main_df$key10==1]),
+                  length(main_df$key11[main_df$person5==1&main_df$key11==1])),ncol=6)
+p6key2 <- matrix(c(length(main_df$key6[main_df$person6==1&main_df$key6==1]),
+                  length(main_df$key7[main_df$person6==1&main_df$key7==1]),
+                  length(main_df$key8[main_df$person6==1&main_df$key8==1]),
+                  length(main_df$key9[main_df$person6==1&main_df$key9==1]),
+                  length(main_df$key10[main_df$person6==1&main_df$key10==1]),
+                  length(main_df$key11[main_df$person6==1&main_df$key11==1])),ncol=6)
+p7key2 <- matrix(c(length(main_df$key6[main_df$person7==1&main_df$key6==1]),
+                  length(main_df$key7[main_df$person7==1&main_df$key7==1]),
+                  length(main_df$key8[main_df$person7==1&main_df$key8==1]),
+                  length(main_df$key9[main_df$person7==1&main_df$key9==1]),
+                  length(main_df$key10[main_df$person7==1&main_df$key10==1]),
+                  length(main_df$key11[main_df$person7==1&main_df$key11==1])),ncol=6)
+pkey2 <- rbind(p1key2,p2key2,p3key2,p4key2,p5key2,p6key2,p7key2)
+colnames(pkey2) <- c("이랜드 노조","뉴코아 노조","뉴코아-이랜드","이랜드-뉴코아","뉴코아 이랜드","이랜드 뉴코아")
+rownames(pkey2) <- c("김경욱","이경옥","이남신","홍윤경","박양수","최호섭","김호진")
+pkey2_df <- as.data.frame(pkey2)
+rownames(pkey2_df) <- c("김경욱","이경옥","이남신","홍윤경","박양수","최호섭","김호진")
+pkey2_df
+pkey2_df <- text_matrix(pkey2_df,table_title = "Table6 - The number of articles mention different combinations given different person")
+write.xlsx(pkey2_df,"Main_Analysis-Part1_tables and graphs\\Table6.xlsx",
+           col.names = FALSE, row.names = FALSE)
+```
+```{r}
+
+```
+
+## Visualization by keywords
+```{r}
+
+# font_import()
+gkey1 <- main_df%>%filter(key1==1)%>%group_by(quarter)%>%count(key1)%>%
+  ggplot(aes(x=quarter,y=n))+
+  geom_bar(stat = "identity")+ theme_classic()+
+  xlab("Time")+ylab("Frequency")+labs(title="이랜드")+scale_x_yearqtr(format="%Y-Q%q",n=4)
+gkey2 <- main_df%>%filter(key2==1)%>%group_by(quarter)%>%count(key2)%>%
+  ggplot(aes(x=quarter,y=n))+
+  geom_bar(stat = "identity")+ theme_classic()+
+  xlab("Time")+ylab("Frequency")+labs(title="뉴코아")+scale_x_yearqtr(format="%Y-Q%q",n=4)
+gkey3 <- main_df%>%filter(key3==1)%>%group_by(quarter)%>%count(key3)%>%
+  ggplot(aes(x=quarter,y=n))+
+  geom_bar(stat = "identity")+ theme_classic()+
+  xlab("Time")+ylab("Frequency")+labs(title="노조")+scale_x_yearqtr(format="%Y-Q%q",n=4)
+gkey4 <- main_df%>%filter(key4==1)%>%group_by(quarter)%>%count(key4)%>%
+  ggplot(aes(x=quarter,y=n))+
+  geom_bar(stat = "identity")+ theme_classic()+
+  xlab("Time")+ylab("Frequency")+labs(title="전환배치")+scale_x_yearqtr(format="%Y-Q%q",n=4)
+gkey5 <- main_df%>%filter(key5==1)%>%group_by(quarter)%>%count(key5)%>%
+  ggplot(aes(x=quarter,y=n))+
+  geom_bar(stat = "identity")+ theme_classic()+
+  xlab("Time")+ylab("Frequency")+labs(title="공동투쟁본부")+scale_x_yearqtr(format="%Y-Q%q",n=4)
+
+gkey6 <- main_df%>%filter(key6==1)%>%group_by(quarter)%>%count(key6)%>%
+  ggplot(aes(x=quarter,y=n))+
+  geom_bar(stat = "identity")+ theme_classic()+
+  xlab("Time")+ylab("Frequency")+labs(title="이랜드 노조")+scale_x_yearqtr(format="%Y-Q%q",n=4)
+gkey7 <- main_df%>%filter(key7==1)%>%group_by(quarter)%>%count(key7)%>%
+  ggplot(aes(x=quarter,y=n))+
+  geom_bar(stat = "identity")+ theme_classic()+
+  xlab("Time")+ylab("Frequency")+labs(title="뉴코아 노조")+scale_x_yearqtr(format="%Y-Q%q",n=4)
+gkey8 <- main_df%>%filter(key8==1)%>%group_by(quarter)%>%count(key8)%>%
+  ggplot(aes(x=quarter,y=n))+
+  geom_bar(stat = "identity")+ theme_classic()+
+  xlab("Time")+ylab("Frequency")+labs(title="뉴코아-이랜드")+scale_x_yearqtr(format="%Y-Q%q",n=4)
+gkey9 <- main_df%>%filter(key9==1)%>%group_by(quarter)%>%count(key9)%>%
+ ggplot(aes(x=quarter,y=n))+
+ geom_bar(stat = "identity")+ theme_classic()+
+  xlab("Time")+ylab("Frequency")+labs(title="이랜드-뉴코아")+scale_x_yearqtr(format="%Y-Q%q",n=4)
+gkey10 <- main_df%>%filter(key10==1)%>%ggplot(aes(x=quarter,y=key10))+
+  geom_bar(stat="identity")+theme_bw()+
+  xlab("Time")+ylab("Frequency")+labs(title="뉴코아 이랜드")+scale_x_yearqtr(format="%Y-Q%q",n=4)
+gkey11 <- main_df%>%filter(key11==1)%>%group_by(quarter)%>%count(key10)%>%
+ ggplot(aes(x=quarter,y=n))+
+ geom_bar(stat = "identity")+ theme_classic()+
+  xlab("Time")+ylab("Frequency")+labs(title="이랜드 뉴코아")+scale_x_yearqtr(format="%Y-Q%q",n=4)
+```
+```{r}
+multiplot(gkey1,gkey2,cols=2);multiplot(gkey3,gkey4,cols=2);multiplot(gkey5,cols = 2)
+```
+
+```{r}
+multiplot(gkey6,gkey7,cols=2);multiplot(gkey8,gkey9, cols = 2);multiplot(gkey10,gkey11,cols=2)
+```
+
+## Visualization by person
+```{r}
+gperson1 <- main_df%>%filter(person1==1)%>%group_by(monthly)%>%count(person1)%>%ggplot(aes(x=monthly,y=n))+
+  geom_bar(stat = "identity")+theme_classic()+labs(title="김경욱")+ylab("Frequency")+xlim(c("2006-01-01","2008-12-31"))+
+  xlab("Time")+scale_x_yearmon(format="%Y.%m")
+gperson2 <- main_df%>%filter(person2==1)%>%group_by(monthly)%>%count(person2)%>%ggplot(aes(x=monthly,y=n))+
+  geom_bar(stat = "identity")+theme_classic()+labs(title="이남신")+ylab("Frequency")+xlim(c("2006-01-01","2008-12-31"))+
+  xlab("Time")+scale_x_yearmon(format="%Y.%m")
+gperson3 <- main_df%>%filter(person3==1)%>%group_by(monthly)%>%count(person3)%>%ggplot(aes(x=monthly,y=n))+
+  geom_bar(stat = "identity")+theme_classic()+labs(title="이경옥")+ylab("Frequency")+xlim(c("2006-01-01","2008-12-31"))+
+  xlab("Time")+scale_x_yearmon(format="%Y.%m")
+gperson4 <- main_df%>%filter(person4==1)%>%group_by(monthly)%>%count(person4)%>%ggplot(aes(x=monthly,y=n))+
+  geom_bar(stat = "identity")+theme_classic()+labs(title="홍윤경")+ylab("Frequency")+xlim(c("2006-01-01","2008-12-31"))+
+  xlab("Time")+scale_x_yearmon(format="%Y.%m")
+gperson5 <- main_df%>%filter(person5==1)%>%group_by(monthly)%>%count(person5)%>%ggplot(aes(x=monthly,y=n))+
+  geom_bar(stat = "identity")+theme_classic()+labs(title="박양수")+ylab("Frequency")+xlim(c("2006-01-01","2008-12-31"))+
+  xlab("Time")+scale_x_yearmon(format="%Y.%m")
+gperson6 <- main_df%>%filter(person6==1)%>%group_by(monthly)%>%count(person6)%>%ggplot(aes(x=monthly,y=n))+
+  geom_bar(stat = "identity")+theme_classic()+labs(title="김호진")+ylab("Frequency")+xlim(c("2006-01-01","2008-12-31"))+
+  xlab("Time")+scale_x_yearmon(format="%Y.%m")
+gperson7 <- main_df%>%filter(person7==1)%>%group_by(monthly)%>%count(person7)%>%ggplot(aes(x=monthly,y=n))+
+  geom_bar(stat = "identity")+theme_classic()+labs(title="최호섭")+ylab("Frequency")+xlim(c("2006-01-01","2008-12-31"))+
+  xlab("Time")+scale_x_yearmon(format="%Y.%m")
+multiplot(gperson1,gperson2,gperson3,gperson4,cols=2);multiplot(gperson5,gperson6,gperson7,cols=2)
+
+```
+```{r}
+
+```
+
+
+
+```{r}
+person1time <- main_df%>%group_by(monthly)%>%filter(person1==1)%>%count(person1)
+colnames(person1time)[2] <- "Speaker"
+person1time$Speaker <- as.numeric(person1time$Speaker)
+person1time$Speaker[person1time$Speaker==2] <- 1
+person2time <- main_df%>%group_by(monthly)%>%filter(person2==1)%>%count(person2)
+colnames(person2time)[2] <- "Speaker"
+person2time$Speaker <- as.numeric(person2time$Speaker)
+person2time$Speaker[person2time$Speaker==2] <- 2
+person3time <- main_df%>%group_by(monthly)%>%filter(person3==1)%>%count(person3)
+colnames(person3time)[2] <- "Speaker"
+person3time$Speaker <- as.numeric(person3time$Speaker)
+person3time$Speaker[person3time$Speaker==2] <- 3
+person4time <- main_df%>%group_by(monthly)%>%filter(person4==1)%>%count(person4)
+colnames(person4time)[2] <- "Speaker"
+person4time$Speaker <- as.numeric(person4time$Speaker)
+person4time$Speaker[person4time$Speaker==2] <- 4
+person5time <- main_df%>%group_by(monthly)%>%filter(person5==1)%>%count(person5)
+colnames(person5time)[2] <- "Speaker"
+person5time$Speaker <- as.numeric(person5time$Speaker)
+person5time$Speaker[person5time$Speaker==2] <- 5
+person6time <- main_df%>%group_by(monthly)%>%filter(person6==1)%>%count(person6)
+colnames(person6time)[2] <- "Speaker"
+person6time$Speaker <- as.numeric(person6time$Speaker)
+person6time$Speaker[person6time$Speaker==2] <- 6
+person7time <- main_df%>%group_by(monthly)%>%filter(person7==1)%>%count(person7)
+colnames(person7time)[2] <- "Speaker"
+person7time$Speaker <- as.numeric(person7time$Speaker)
+person7time$Speaker[person7time$Speaker==2] <- 7
+persontime1 <- rbind(person1time,person2time)
+persontime1 <- rbind(persontime1,person3time)
+persontime1 <- rbind(persontime1,person4time)
+persontime1 <- rbind(persontime1,person5time)
+persontime1 <- rbind(persontime1,person6time)
+persontime1 <- rbind(persontime1,person7time)
+persontime1$Speaker <- as.character(persontime1$Speaker)
+persontime1$monthly <- as.yearmon(persontime1$monthly)
+pg1 <- persontime1%>%ggplot(aes(x=monthly,y=n,fill=Speaker))+geom_bar(stat="identity")+
+  ylab("Frequency")+xlab("Time")+
+  scale_fill_discrete(labels = c("KKW","LKO","LMS","HWK","PYS","CHS","KHJ"))+
+  scale_x_yearmon(format = "%Y-%m")+
+  #scale_x_date(date_breaks = "1 month", date_minor_breaks = "1 week", date_labels = "%Y-%m")+
+  labs(title="Frequency of each speaker mentioned by month")+
+  theme_classic()
+pg1
+```
+
+
+# Limiting Date from June 2007 to October 2007
+```{r}
+lim_main_df <- main_df[main_df$Dates>="2007-06-01" & main_df$Dates<="2007-10-31",]
+lim_main_df$Weeks <- as.Date(cut(lim_main_df$Dates,breaks = "week"))
+#lim_main_df$Weeks <- week(ymd(lim_main_df$Dates))
+#lim_main_df$Weeks <- format(lim_main_df$Dates,"%Y-%")
+```
+```{r}
+person1time <- lim_main_df%>%group_by(Weeks)%>%filter(person1==1)%>%count(person1)
+colnames(person1time)[2] <- "Speaker"
+person1time$Speaker <- as.numeric(person1time$Speaker)
+person1time$Speaker[person1time$Speaker==2] <- 1
+person2time <- lim_main_df%>%group_by(Weeks)%>%filter(person2==1)%>%count(person2)
+colnames(person2time)[2] <- "Speaker"
+person2time$Speaker <- as.numeric(person2time$Speaker)
+person2time$Speaker[person2time$Speaker==2] <- 2
+person3time <- lim_main_df%>%group_by(Weeks)%>%filter(person3==1)%>%count(person3)
+colnames(person3time)[2] <- "Speaker"
+person3time$Speaker <- as.numeric(person3time$Speaker)
+person3time$Speaker[person3time$Speaker==2] <- 3
+person4time <- lim_main_df%>%group_by(Weeks)%>%filter(person4==1)%>%count(person4)
+colnames(person4time)[2] <- "Speaker"
+person4time$Speaker <- as.numeric(person4time$Speaker)
+person4time$Speaker[person4time$Speaker==2] <- 4
+person5time <- lim_main_df%>%group_by(Weeks)%>%filter(person5==1)%>%count(person5)
+colnames(person5time)[2] <- "Speaker"
+person5time$Speaker <- as.numeric(person5time$Speaker)
+person5time$Speaker[person5time$Speaker==2] <- 5
+person6time <- lim_main_df%>%group_by(Weeks)%>%filter(person6==1)%>%count(person6)
+colnames(person6time)[2] <- "Speaker"
+person6time$Speaker <- as.numeric(person6time$Speaker)
+person6time$Speaker[person6time$Speaker==2] <- 6
+person7time <- lim_main_df%>%group_by(Weeks)%>%filter(person7==1)%>%count(person7)
+colnames(person7time)[2] <- "Speaker"
+person7time$Speaker <- as.numeric(person7time$Speaker)
+person7time$Speaker[person7time$Speaker==2] <- 7
+persontime1 <- rbind(person1time,person2time)
+persontime1 <- rbind(persontime1,person3time)
+persontime1 <- rbind(persontime1,person4time)
+persontime1 <- rbind(persontime1,person5time)
+persontime1 <- rbind(persontime1,person6time)
+persontime1 <- rbind(persontime1,person7time)
+persontime1$Speaker <- as.character(persontime1$Speaker)
+persontime1$n <- as.numeric(persontime1$n)
+persontime1$Speaker <- as.factor(persontime1$Speaker)
+levels(persontime1$Speaker) <- c("KKW","LKO","LMS","HWK","PYS","CHS","KHJ")
+pg2 <- persontime1%>%filter(!is.na(n))%>%filter(!is.na(Speaker))%>%filter(!is.na(Weeks))%>%
+  ggplot(aes(x=as.Date(Weeks),y=n,fill=Speaker))+geom_bar(stat="identity")+#+geom_area(stat="identity")
+  ylab("Frequency")+xlab("Time")+labs(title="Frequency of each speaker mentioned from 2007-06-01~2007-12-31")+
+  scale_x_date(date_breaks = "1 month", date_minor_breaks = "1 week", date_labels = "%Y-%m")+
+  theme_classic()#+ scale_fill_discrete(labels = c("KKW","LKO","LMS","HWK","PYS","CHS","KHJ"))
+pg2
+```
+
+```{r}
+
+#marketp <- read_spss("2008언론수용자조사(14회)_data_공개.SAV")
+#head(marketp)
+```
+```{r}
+#write.xlsx(new_main,"new_main.xlsx")
+#write_csv(new_main,"new_main.csv")
+```
+```{r}
+#write_dta(new_main,"new_main.dta")
+```
+```{r}
+# 배치전환, 전환배치, 구조조정, 배치 전환, 전환 배치
+lim_main_df$newk1 <- as.factor(as.integer(grepl(pattern = "배치전환",x=lim_main_df$Contents)))
+lim_main_df$newk2 <- as.factor(as.integer(grepl(pattern = "전환배치",x=lim_main_df$Contents)))
+lim_main_df$newk3 <- as.factor(as.integer(grepl(pattern = "배치 전환",x=lim_main_df$Contents)))
+lim_main_df$newk4 <- as.factor(as.integer(grepl(pattern = "전환 배치",x=lim_main_df$Contents)))
+lim_main_df$newk5 <- as.factor(as.integer(grepl(pattern = "구조조정",x=lim_main_df$Contents)))
+lim_main_df$newk6 <- as.factor(as.integer(grepl(pattern = "이랜드일반노조",x=lim_main_df$Contents)))
+lim_main_df$newk7 <- as.factor(as.integer(grepl(pattern = "뉴코아노조",x=lim_main_df$Contents)))
+lim_main_df$newk8 <- as.factor(as.integer(grepl(pattern = "이랜드 일반노조",x=lim_main_df$Contents)))
+lim_main_df$newk9 <- as.factor(as.integer(grepl(pattern = "비정규직",x=lim_main_df$Contents)))
+
+tb1 <- rbind(table(lim_main_df$newk1),table(lim_main_df$newk2),table(lim_main_df$newk3),table(lim_main_df$newk4),
+             table(lim_main_df$newk5),table(lim_main_df$newk6))
+rownames(tb1) <- c("배치전환","전환배치","배치 전환","전환 배치","구조조정","이랜드일반노조")
+tb1 <- as.data.frame(tb1)
+
+write.xlsx(tb1,"Main_Analysis-Part1_tables and graphs\\Table8.xlsx",row.names = TRUE,col.names = TRUE)
+
+
+length(lim_main_df$Title[lim_main_df$key6==1|lim_main_df$newk6==1][lim_main_df$key7==1|lim_main_df$newk7==1]);length(lim_main_df$Title[lim_main_df$key6==1|lim_main_df$newk6==1]);length(lim_main_df$Title[lim_main_df$key7==1|lim_main_df$newk7==1])
+```
+```{r}
+
+```
+```{r}
+lim_main_df$cat1 <- ifelse(lim_main_df$key6==1|lim_main_df$newk6==1|lim_main_df$newk8==1,1,0)
+lim_main_df$cat2 <- ifelse(lim_main_df$key7==1|lim_main_df$newk7==1,1,0)
+lim_main_df$cat3 <- ifelse(lim_main_df$cat1==1&lim_main_df$cat2==1,1,0)
+
+experi_df <- lim_main_df[lim_main_df$cat3==1,]
+dim(experi_df)
+
+experi_df$dum1 <- ifelse(experi_df$newk1==1|experi_df$newk3==1,1,0)
+experi_df$dum2 <- ifelse(experi_df$newk2==1|experi_df$newk4==1,1,0)
+experi_df$dum3 <- ifelse(experi_df$dum1==1|experi_df$dum2==1,1,0)
+
+experi_df$dum3 <- as.factor(experi_df$dum3)
+levels(experi_df$dum3) <- c("전환배치X","전환배치 언급")
+experi_df$newk9 <- as.factor(experi_df$newk9)
+levels(experi_df$newk9) <- c("비정규 X", "비정규직 언급")
+tb1 <- table(experi_df$newk9,experi_df$dum3)
+tb1
+write.table(tb1,"Main_Analysis-Part1_tables and graphs//Table7.csv")
+```
+```{r}
+main_df$noeland <- abs(main_df$key1-1)
+noeland <- main_df
+yeseland <- main_df%>%group_by(Dates)
+main_df%>%group_by(monthly)%>%count(noeland)
+main_df%>%group_by(monthly)%>%count(key1)
+main_df%>%group_by(monthly)%>%count(key1,noeland)%>%ggplot(aes(x=monthly,y=n))+geom_area()
+```
+

@@ -1,0 +1,875 @@
+---
+title: "Main_Analysis-Part3"
+author: "Hyundo Im"
+date: "2018³â 11¿ù 6ÀÏ"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Packages for part 3
+
+```{r}
+library(tidyverse)
+library(tibble)
+library(readxl)
+library(zoo)
+library(lubridate)
+library(xlsx)
+library(rJava)
+library(foreign)
+library(haven)
+#library(KoNLP)
+
+# Loading a local function for multiple plots
+multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
+  library(grid)
+
+  # Make a list from the ... arguments and plotlist
+  plots <- c(list(...), plotlist)
+
+  numPlots = length(plots)
+
+  # If layout is NULL, then use 'cols' to determine layout
+  if (is.null(layout)) {
+    # Make the panel
+    # ncol: Number of columns of plots
+    # nrow: Number of rows needed, calculated from # of cols
+    layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
+                    ncol = cols, nrow = ceiling(numPlots/cols))
+  }
+
+ if (numPlots==1) {
+    print(plots[[1]])
+
+  } else {
+    # Set up the page
+    grid.newpage()
+    pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
+
+    # Make each plot, in the correct location
+    for (i in 1:numPlots) {
+      # Get the i,j matrix positions of the regions that contain this subplot
+      matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+
+      print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
+                                      layout.pos.col = matchidx$col))
+    }
+  }
+}
+```
+
+```{r}
+marketp <- read_spss("2008¾ð·Ð¼ö¿ëÀÚÁ¶»ç(14È¸)_data_°ø°³.SAV")
+main_df <- read_excel("Main_df.xlsx")
+main_df$monthly <- cut(main_df$Dates,breaks = "months")
+main_df$monthly <- as.yearmon(main_df$monthly)
+main_df$week <- as.Date(cut(main_df$Dates,breaks="week"))
+
+main_df$cat1 <- as.factor(as.integer(grepl(pattern="³ëÁ¶",x=main_df$Contents)))
+main_df$cat2 <- as.factor(as.integer(grepl(pattern="³ëµ¿Á¶ÇÕ",x=main_df$Contents)))
+main_df$cat3 <- as.factor(as.integer(grepl(pattern="³ëµ¿ Á¶ÇÕ",x=main_df$Contents)))
+
+target_df <- main_df[main_df$cat1==1|main_df$cat2==1|main_df$cat3==1,]
+
+# Split each article by sentence into list
+text_lines <- c()
+for(i in 1:length(target_df$Contents)){
+  text_lines[i] <- strsplit(target_df$Contents[i],"(?<=\\.)\\s(?=[°¡-ÆR])",perl = T)
+}
+
+# Store unlist the sublist of text_lines and store them into the new list Lines
+# Corresponding to text_lines, Create a new list Title to align lists
+Lines <- c()
+Title <- c()
+for(i in 1:length(text_lines)){
+  Lines<-c(Lines,unlist(text_lines[i]))
+  Title <- c(Title,rep(target_df$Title[i],length(unlist(text_lines[i]))))
+}
+
+# Check whether two list have the same dimension
+length(Lines);length(Title)
+# Create the dataframe that contains titles and sentences of articles
+text_df <- data_frame(Title=Title,Lines=Lines)
+```
+```{r}
+# keys: ÀÌ·£µå, ´ºÄÚ¾Æ, ³ëÁ¶, ÀüÈ¯¹èÄ¡, °øµ¿ÅõÀïº»ºÎ, ÀÌ·£µå ³ëÁ¶, ´ºÄÚ¾Æ ³ëÁ¶, ´ºÄÚ¾Æ-ÀÌ·£µå, ÀÌ·£µå-´ºÄÚ¾Æ, ´ºÄÚ¾Æ ÀÌ·£µå,
+#       ÀÌ·£µå ´ºÄÚ¾Æ
+# person: ±è°æ¿í, ÀÌ³²½Å, ÀÌ°æ¿Á, È«À±°æ, ¹Ú¾ç¼ö, ±èÈ£Áø, ÃÖÈ£¼·
+main_df$key1 <- as.factor(as.integer(grepl(pattern = "ÀÌ·£µå",x=main_df$Contents)))
+main_df$key2 <- as.factor(as.integer(grepl(pattern = "´ºÄÚ¾Æ",x=main_df$Contents)))
+main_df$key3 <- as.factor(as.integer(grepl(pattern = "³ëÁ¶",x=main_df$Contents)))
+main_df$key4 <- as.factor(as.integer(grepl(pattern = "ÀüÈ¯¹èÄ¡",x=main_df$Contents)))
+main_df$key5 <- as.factor(as.integer(grepl(pattern = "°øµ¿ÅõÀïº»ºÎ",x=main_df$Contents)))
+main_df$key6 <- as.factor(as.integer(grepl(pattern = "ÀÌ·£µå ³ëÁ¶",x=main_df$Contents)))
+main_df$key7 <- as.factor(as.integer(grepl(pattern = "´ºÄÚ¾Æ ³ëÁ¶",x=main_df$Contents)))
+main_df$key8 <- as.factor(as.integer(grepl(pattern = "´ºÄÚ¾Æ-ÀÌ·£µå",x=main_df$Contents)))
+main_df$key9 <- as.factor(as.integer(grepl(pattern = "ÀÌ·£µå-´ºÄÚ¾Æ",x=main_df$Contents)))
+main_df$key10 <- as.factor(as.integer(grepl(pattern = "´ºÄÚ¾Æ ÀÌ·£µå",x=main_df$Contents)))
+main_df$key11 <- as.factor(as.integer(grepl(pattern = "ÀÌ·£µå ´ºÄÚ¾Æ",x=main_df$Contents))) 
+main_df$person1 <- as.factor(as.integer(grepl(pattern = "±è°æ¿í",x=main_df$Contents)))
+main_df$person2 <- as.factor(as.integer(grepl(pattern = "ÀÌ³²½Å",x=main_df$Contents)))
+main_df$person3 <- as.factor(as.integer(grepl(pattern = "ÀÌ°æ¿Á",x=main_df$Contents)))
+main_df$person4 <- as.factor(as.integer(grepl(pattern = "È«À±°æ",x=main_df$Contents)))
+main_df$person5 <- as.factor(as.integer(grepl(pattern = "¹Ú¾ç¼ö",x=main_df$Contents)))
+main_df$person6 <- as.factor(as.integer(grepl(pattern = "±èÈ£Áø",x=main_df$Contents)))
+main_df$person7 <- as.factor(as.integer(grepl(pattern = "ÃÖÈ£¼·",x=main_df$Contents)))
+
+main_df$newk1 <- as.factor(as.integer(grepl(pattern = "¹èÄ¡ÀüÈ¯",x=main_df$Contents)))
+main_df$newk2 <- as.factor(as.integer(grepl(pattern = "ÀüÈ¯¹èÄ¡",x=main_df$Contents)))
+main_df$newk3 <- as.factor(as.integer(grepl(pattern = "¹èÄ¡ ÀüÈ¯",x=main_df$Contents)))
+main_df$newk4 <- as.factor(as.integer(grepl(pattern = "ÀüÈ¯ ¹èÄ¡",x=main_df$Contents)))
+main_df$newk5 <- as.factor(as.integer(grepl(pattern = "±¸Á¶Á¶Á¤",x=main_df$Contents)))
+main_df$newk6 <- as.factor(as.integer(grepl(pattern = "ÀÌ·£µåÀÏ¹Ý³ëÁ¶",x=main_df$Contents)))
+main_df$newk7 <- as.factor(as.integer(grepl(pattern = "´ºÄÚ¾Æ³ëÁ¶",x=main_df$Contents)))
+main_df$newk8 <- as.factor(as.integer(grepl(pattern = "ÀÌ·£µå ÀÏ¹Ý³ëÁ¶",x=main_df$Contents)))
+main_df$newk9 <- as.factor(as.integer(grepl(pattern = "ºñÁ¤±ÔÁ÷",x=main_df$Contents)))
+
+main_df$jeonhwan <- ifelse(main_df$newk1==1|main_df$newk2==1|main_df$newk3==1|main_df$newk4==1,1,0)
+```
+```{r}
+new_main <- text_df%>%left_join(target_df[,c("Title","Dates","Provider","monthly")],by="Title")
+monthly_data <- new_main[new_main$Dates>="2007-01-01" & new_main$Dates<="2007-12-31",]
+weekly_data <- new_main[new_main$Dates>="2007-05-01" & new_main$Dates<="2007-10-31",]
+weekly_data$week <- as.Date(cut(weekly_data$Dates,breaks = "week"))
+main_df$week <- as.Date(cut(main_df$Dates,breaks="week"))
+```
+
+```{r}
+newkoa <- main_df[monthly_data$key1==1&main_df$Dates>="2007-01-01"&main_df$Dates<="2007-12-31",]
+newkoa <-  text_df%>%left_join(newkoa[,c("Title","Dates","Provider","monthly","Contents")],by="Title")
+newkoa_lim <- main_df[weekly_data$key1==1&main_df$Dates>="2007-05-01"&main_df$Dates<="2007-10-31",]
+newkoa_lim <-  text_df%>%left_join(newkoa_lim[,c("Title","Dates","Provider","week","Contents")],by="Title")
+newkoa$monthly <- format(as.Date(newkoa$Dates),"%Y-%m")
+
+newkoa$key1 <- as.factor(as.integer(grepl(pattern = "ÀÌ·£µå",x=newkoa$Lines)))
+newkoa$key2 <- as.factor(as.integer(grepl(pattern = "´ºÄÚ¾Æ",x=newkoa$Lines)))
+newkoa$key3 <- as.factor(as.integer(grepl(pattern = "³ëÁ¶",x=newkoa$Lines)))
+newkoa$key4 <- as.factor(as.integer(grepl(pattern = "ÀüÈ¯¹èÄ¡",x=newkoa$Lines)))
+newkoa$key5 <- as.factor(as.integer(grepl(pattern = "°øµ¿ÅõÀïº»ºÎ",x=newkoa$Lines)))
+newkoa$key6 <- as.factor(as.integer(grepl(pattern = "ÀÌ·£µå ³ëÁ¶",x=newkoa$Lines)))
+newkoa$key7 <- as.factor(as.integer(grepl(pattern = "´ºÄÚ¾Æ ³ëÁ¶",x=newkoa$Lines)))
+newkoa$key8 <- as.factor(as.integer(grepl(pattern = "´ºÄÚ¾Æ-ÀÌ·£µå",x=newkoa$Lines)))
+newkoa$key9 <- as.factor(as.integer(grepl(pattern = "ÀÌ·£µå-´ºÄÚ¾Æ",x=newkoa$Lines)))
+newkoa$key10 <- as.factor(as.integer(grepl(pattern = "´ºÄÚ¾Æ ÀÌ·£µå",x=newkoa$Lines)))
+newkoa$key11 <- as.factor(as.integer(grepl(pattern = "ÀÌ·£µå ´ºÄÚ¾Æ",x=newkoa$Lines))) 
+
+newkoa$person1 <- as.factor(as.integer(grepl(pattern = "±è°æ¿í",x=newkoa$Lines)))
+newkoa$person2 <- as.factor(as.integer(grepl(pattern = "ÀÌ³²½Å",x=newkoa$Lines)))
+newkoa$person3 <- as.factor(as.integer(grepl(pattern = "ÀÌ°æ¿Á",x=newkoa$Lines)))
+newkoa$person4 <- as.factor(as.integer(grepl(pattern = "È«À±°æ",x=newkoa$Lines)))
+newkoa$person5 <- as.factor(as.integer(grepl(pattern = "¹Ú¾ç¼ö",x=newkoa$Lines)))
+newkoa$person6 <- as.factor(as.integer(grepl(pattern = "±èÈ£Áø",x=newkoa$Lines)))
+newkoa$person7 <- as.factor(as.integer(grepl(pattern = "ÃÖÈ£¼·",x=newkoa$Lines)))
+
+newkoa$newk1 <- as.factor(as.integer(grepl(pattern = "¹èÄ¡ÀüÈ¯",x=newkoa$Lines)))
+newkoa$newk2 <- as.factor(as.integer(grepl(pattern = "ÀüÈ¯¹èÄ¡",x=newkoa$Lines)))
+newkoa$newk3 <- as.factor(as.integer(grepl(pattern = "¹èÄ¡ ÀüÈ¯",x=newkoa$Lines)))
+newkoa$newk4 <- as.factor(as.integer(grepl(pattern = "ÀüÈ¯ ¹èÄ¡",x=newkoa$Lines)))
+newkoa$newk5 <- as.factor(as.integer(grepl(pattern = "±¸Á¶Á¶Á¤",x=newkoa$Lines)))
+newkoa$newk6 <- as.factor(as.integer(grepl(pattern = "ÀÌ·£µåÀÏ¹Ý³ëÁ¶",x=newkoa$Lines)))
+newkoa$newk7 <- as.factor(as.integer(grepl(pattern = "´ºÄÚ¾Æ³ëÁ¶",x=newkoa$Lines)))
+newkoa$newk8 <- as.factor(as.integer(grepl(pattern = "ÀÌ·£µå ÀÏ¹Ý³ëÁ¶",x=newkoa$Lines)))
+newkoa$newk9 <- as.factor(as.integer(grepl(pattern = "ºñÁ¤±ÔÁ÷",x=newkoa$Lines)))
+
+
+# Create keywords and person variables for weekly data
+newkoa_lim$key1 <- as.factor(as.integer(grepl(pattern = "ÀÌ·£µå",x=newkoa_lim$Lines)))
+newkoa_lim$key2 <- as.factor(as.integer(grepl(pattern = "´ºÄÚ¾Æ",x=newkoa_lim$Lines)))
+newkoa_lim$key3 <- as.factor(as.integer(grepl(pattern = "³ëÁ¶",x=newkoa_lim$Lines)))
+newkoa_lim$key4 <- as.factor(as.integer(grepl(pattern = "ÀüÈ¯¹èÄ¡",x=newkoa_lim$Lines)))
+newkoa_lim$key5 <- as.factor(as.integer(grepl(pattern = "°øµ¿ÅõÀïº»ºÎ",x=newkoa_lim$Lines)))
+newkoa_lim$key6 <- as.factor(as.integer(grepl(pattern = "ÀÌ·£µå ³ëÁ¶",x=newkoa_lim$Lines)))
+newkoa_lim$key7 <- as.factor(as.integer(grepl(pattern = "´ºÄÚ¾Æ ³ëÁ¶",x=newkoa_lim$Lines)))
+newkoa_lim$key8 <- as.factor(as.integer(grepl(pattern = "´ºÄÚ¾Æ-ÀÌ·£µå",x=newkoa_lim$Lines)))
+newkoa_lim$key9 <- as.factor(as.integer(grepl(pattern = "ÀÌ·£µå-´ºÄÚ¾Æ",x=newkoa_lim$Lines)))
+newkoa_lim$key10 <- as.factor(as.integer(grepl(pattern = "´ºÄÚ¾Æ ÀÌ·£µå",x=newkoa_lim$Lines)))
+newkoa_lim$key11 <- as.factor(as.integer(grepl(pattern = "ÀÌ·£µå ´ºÄÚ¾Æ",x=newkoa_lim$Lines))) 
+
+newkoa_lim$person1 <- as.factor(as.integer(grepl(pattern = "±è°æ¿í",x=newkoa_lim$Lines)))
+newkoa_lim$person2 <- as.factor(as.integer(grepl(pattern = "ÀÌ³²½Å",x=newkoa_lim$Lines)))
+newkoa_lim$person3 <- as.factor(as.integer(grepl(pattern = "ÀÌ°æ¿Á",x=newkoa_lim$Lines)))
+newkoa_lim$person4 <- as.factor(as.integer(grepl(pattern = "È«À±°æ",x=newkoa_lim$Lines)))
+newkoa_lim$person5 <- as.factor(as.integer(grepl(pattern = "¹Ú¾ç¼ö",x=newkoa_lim$Lines)))
+newkoa_lim$person6 <- as.factor(as.integer(grepl(pattern = "±èÈ£Áø",x=newkoa_lim$Lines)))
+newkoa_lim$person7 <- as.factor(as.integer(grepl(pattern = "ÃÖÈ£¼·",x=newkoa_lim$Lines)))
+
+newkoa_lim$newk1 <- as.factor(as.integer(grepl(pattern = "¹èÄ¡ÀüÈ¯",x=newkoa_lim$Lines)))
+newkoa_lim$newk2 <- as.factor(as.integer(grepl(pattern = "ÀüÈ¯¹èÄ¡",x=newkoa_lim$Lines)))
+newkoa_lim$newk3 <- as.factor(as.integer(grepl(pattern = "¹èÄ¡ ÀüÈ¯",x=newkoa_lim$Lines)))
+newkoa_lim$newk4 <- as.factor(as.integer(grepl(pattern = "ÀüÈ¯ ¹èÄ¡",x=newkoa_lim$Lines)))
+newkoa_lim$newk5 <- as.factor(as.integer(grepl(pattern = "±¸Á¶Á¶Á¤",x=newkoa_lim$Lines)))
+newkoa_lim$newk6 <- as.factor(as.integer(grepl(pattern = "ÀÌ·£µåÀÏ¹Ý³ëÁ¶",x=newkoa_lim$Lines)))
+newkoa_lim$newk7 <- as.factor(as.integer(grepl(pattern = "´ºÄÚ¾Æ³ëÁ¶",x=newkoa_lim$Lines)))
+newkoa_lim$newk8 <- as.factor(as.integer(grepl(pattern = "ÀÌ·£µå ÀÏ¹Ý³ëÁ¶",x=newkoa_lim$Lines)))
+newkoa_lim$newk9 <- as.factor(as.integer(grepl(pattern = "ºñÁ¤±ÔÁ÷",x=newkoa_lim$Lines)))
+
+
+```
+
+# Creating Data ´ºÄÚ¾Æ&ÀÌ·£µå&³ëÁ¶
+```{r}
+main_df$part3 <- ifelse(main_df$key1==1&main_df$key2==1&main_df$key3==1,1,0)
+part3_df <- main_df[main_df$Dates>="2007-01-01"&main_df$Dates<="2007-12-31"&main_df$part3==1,]
+part3_df <- text_df%>%left_join(part3_df)
+part3_dflim <- part3_df[part3_df$Dates>="2007-05-01"&part3_df$Dates<="2007-10-31",]
+```
+```{r}
+part3_df$key1 <- as.factor(as.integer(grepl(pattern="ÀüÈ¯¹èÄ¡",part3_df$Lines)))
+part3_df$key2 <- as.factor(as.integer(grepl(pattern = "ÀüÈ¯ ¹èÄ¡",part3_df$Lines)))
+part3_df$key3 <- as.factor(as.integer(grepl(pattern = "±¸Á¶Á¶Á¤",part3_df$Lines)))
+part3_df$key4 <- as.factor(as.integer(grepl(pattern = "±¸Á¶ Á¶Á¤",part3_df$Lines)))
+
+part3_dflim$key1 <- as.factor(as.integer(grepl(pattern="ÀüÈ¯¹èÄ¡",part3_dflim$Lines)))
+part3_dflim$key2 <- as.factor(as.integer(grepl(pattern = "ÀüÈ¯ ¹èÄ¡",part3_dflim$Lines)))
+part3_dflim$key3 <- as.factor(as.integer(grepl(pattern = "±¸Á¶Á¶Á¤",part3_dflim$Lines)))
+part3_dflim$key4 <- as.factor(as.integer(grepl(pattern = "±¸Á¶ Á¶Á¤",part3_dflim$Lines)))
+```
+
+```{r}
+part3_dfg1 <- part3_df%>%filter(key1==1)%>%group_by(monthly,Title)%>%filter(person1==1)%>%count(person1)
+names(part3_dfg1)[3]<-"Speaker"
+part3_dfg1$Speaker <- as.numeric(part3_dfg1$Speaker)
+part3_dfg1$Speaker[part3_dfg1$Speaker==2] <- 1
+part3_dfg2 <- part3_df%>%filter(key1==1)%>%group_by(monthly,Title)%>%filter(person2==1)%>%count(person2)
+names(part3_dfg2)[3] <- "Speaker"
+part3_dfg2$Speaker <- as.numeric(part3_dfg2$Speaker)
+part3_dfg2$Speaker[part3_dfg2$Speaker==2] <- 2
+part3_dfg3 <- part3_df%>%filter(key1==1)%>%group_by(monthly,Title)%>%filter(person3==1)%>%count(person3)
+names(part3_dfg3)[3] <- "Speaker"
+part3_dfg3$Speaker <- as.numeric(part3_dfg3$Speaker)
+part3_dfg3$Speaker[part3_dfg3$Speaker==2] <- 3
+part3_dfg4 <- part3_df%>%filter(key1==1)%>%group_by(monthly,Title)%>%filter(person4==1)%>%count(person4)
+names(part3_dfg4)[3] <- "Speaker"
+part3_dfg4$Speaker <- as.numeric(part3_dfg4$Speaker)
+part3_dfg4$Speaker[part3_dfg4$Speaker==2] <- 4
+part3_dfg5 <- part3_df%>%filter(key1==1)%>%group_by(monthly,Title)%>%filter(person5==1)%>%count(person5)
+names(part3_dfg5)[3] <- "Speaker"
+part3_dfg5$Speaker <- as.numeric(part3_dfg5$Speaker)
+part3_dfg5$Speaker[part3_dfg5$Speaker==2] <- 5
+part3_dfg6 <- part3_df%>%filter(key1==1)%>%group_by(monthly,Title)%>%filter(person6==1)%>%count(person6)
+names(part3_dfg6)[3] <- "Speaker"
+part3_dfg6$Speaker <- as.numeric(part3_dfg6$Speaker)
+part3_dfg6$Speaker[part3_dfg6$Speaker==2] <- 6
+part3_dfg7 <- part3_df%>%filter(key1==1)%>%group_by(monthly,Title)%>%filter(person7==1)%>%count(person7)
+names(part3_dfg7)[3] <- "Speaker"
+part3_dfg7$Speaker <- as.numeric(part3_dfg7$Speaker)
+part3_dfg7$Speaker[part3_dfg7$Speaker==2] <- 7
+
+part3_dfg <- rbind(part3_dfg1,part3_dfg2)
+part3_dfg <- rbind(part3_dfg,part3_dfg3)
+part3_dfg <- rbind(part3_dfg,part3_dfg4)
+part3_dfg <- rbind(part3_dfg,part3_dfg5)
+part3_dfg <- rbind(part3_dfg,part3_dfg6)
+part3_dfg <- rbind(part3_dfg,part3_dfg7)
+part3_dfg$Speaker <- as.character(part3_dfg$Speaker)
+part3_dfg$n <- as.numeric(part3_dfg$n)
+
+main_g1 <- part3_dfg%>%filter(!is.na(n))%>%filter(!is.na(Speaker))%>%filter(!is.na(monthly))%>%
+  ggplot(aes(x=monthly,y=n,fill=Speaker))+geom_bar(stat="identity")+
+  ylab("Frequency")+xlab("Month")+
+  scale_fill_discrete(labels=c("KKW","LNS","LKO","HYK","PYS","KHJ","CHS"))+
+  labs(title="Reassignment",
+       caption="Figure: Bar graph by suspected speaker in 2007")+
+  theme_classic()
+main_g1
+```
+```{r}
+part3_dfg1 <- part3_df%>%filter(key2==1)%>%group_by(monthly,Title)%>%filter(person1==1)%>%count(person1)
+names(part3_dfg2)[3]<-"Speaker"
+part3_dfg1$Speaker <- as.numeric(part3_dfg2$Speaker)
+part3_dfg1$Speaker[part3_dfg1$Speaker==2] <- 1
+part3_dfg2 <- part3_df%>%filter(key2==1)%>%group_by(monthly,Title)%>%filter(person2==1)%>%count(person2)
+names(part3_dfg2)[3] <- "Speaker"
+part3_dfg2$Speaker <- as.numeric(part3_dfg2$Speaker)
+part3_dfg2$Speaker[part3_dfg2$Speaker==2] <- 2
+part3_dfg3 <- part3_df%>%filter(key2==1)%>%group_by(monthly,Title)%>%filter(person3==1)%>%count(person3)
+names(part3_dfg3)[3] <- "Speaker"
+part3_dfg3$Speaker <- as.numeric(part3_dfg3$Speaker)
+part3_dfg3$Speaker[part3_dfg3$Speaker==2] <- 3
+part3_dfg4 <- part3_df%>%filter(key2==1)%>%group_by(monthly,Title)%>%filter(person4==1)%>%count(person4)
+names(part3_dfg4)[3] <- "Speaker"
+part3_dfg4$Speaker <- as.numeric(part3_dfg4$Speaker)
+part3_dfg4$Speaker[part3_dfg4$Speaker==2] <- 4
+part3_dfg5 <- part3_df%>%filter(key2==1)%>%group_by(monthly,Title)%>%filter(person5==1)%>%count(person5)
+names(part3_dfg5)[3] <- "Speaker"
+part3_dfg5$Speaker <- as.numeric(part3_dfg5$Speaker)
+part3_dfg5$Speaker[part3_dfg5$Speaker==2] <- 5
+part3_dfg6 <- part3_df%>%filter(key2==1)%>%group_by(monthly,Title)%>%filter(person6==1)%>%count(person6)
+names(part3_dfg6)[3] <- "Speaker"
+part3_dfg6$Speaker <- as.numeric(part3_dfg6$Speaker)
+part3_dfg6$Speaker[part3_dfg6$Speaker==2] <- 6
+part3_dfg7 <- part3_df%>%filter(key2==1)%>%group_by(monthly,Title)%>%filter(person7==1)%>%count(person7)
+names(part3_dfg7)[3] <- "Speaker"
+part3_dfg7$Speaker <- as.numeric(part3_dfg7$Speaker)
+part3_dfg7$Speaker[part3_dfg7$Speaker==2] <- 7
+
+part3_dfg <- rbind(part3_dfg1,part3_dfg2)
+part3_dfg <- rbind(part3_dfg,part3_dfg3)
+part3_dfg <- rbind(part3_dfg,part3_dfg4)
+part3_dfg <- rbind(part3_dfg,part3_dfg5)
+part3_dfg <- rbind(part3_dfg,part3_dfg6)
+part3_dfg <- rbind(part3_dfg,part3_dfg7)
+part3_dfg$Speaker <- as.character(part3_dfg$Speaker)
+part3_dfg$n <- as.numeric(part3_dfg$n)
+
+main_g2 <- part3_dfg%>%filter(!is.na(n))%>%filter(!is.na(Speaker))%>%filter(!is.na(monthly))%>%
+  ggplot(aes(x=monthly,y=n,fill=Speaker))+geom_bar(stat="identity")+
+  ylab("Frequency")+xlab("Month")+
+  scale_fill_discrete(labels=c("KKW","LMS","LKO","HYK","PYS","KHJ","CHS"))+
+  labs(title="Reassignment (with space)",
+       caption="Figure: Bar graph by suspected speaker in 2007")+
+  theme_classic()
+main_g2
+
+```
+```{r}
+part3_dfg1 <- part3_df%>%filter(key3==1)%>%group_by(monthly,Title)%>%filter(person1==1)%>%count(person1)
+names(part3_dfg1)[3]<-"Speaker"
+part3_dfg1$Speaker <- as.numeric(part3_dfg1$Speaker)
+part3_dfg1$Speaker[part3_dfg1$Speaker==2] <- 1
+part3_dfg2 <- part3_df%>%filter(key3==1)%>%group_by(monthly,Title)%>%filter(person2==1)%>%count(person2)
+names(part3_dfg2)[3] <- "Speaker"
+part3_dfg2$Speaker <- as.numeric(part3_dfg2$Speaker)
+part3_dfg2$Speaker[part3_dfg2$Speaker==2] <- 2
+part3_dfg3 <- part3_df%>%filter(key3==1)%>%group_by(monthly,Title)%>%filter(person3==1)%>%count(person3)
+names(part3_dfg3)[3] <- "Speaker"
+part3_dfg3$Speaker <- as.numeric(part3_dfg3$Speaker)
+part3_dfg3$Speaker[part3_dfg3$Speaker==2] <- 3
+part3_dfg4 <- part3_df%>%filter(key3==1)%>%group_by(monthly,Title)%>%filter(person4==1)%>%count(person4)
+names(part3_dfg4)[3] <- "Speaker"
+part3_dfg4$Speaker <- as.numeric(part3_dfg4$Speaker)
+part3_dfg4$Speaker[part3_dfg4$Speaker==2] <- 4
+part3_dfg5 <- part3_df%>%filter(key3==1)%>%group_by(monthly,Title)%>%filter(person5==1)%>%count(person5)
+names(part3_dfg5)[3] <- "Speaker"
+part3_dfg5$Speaker <- as.numeric(part3_dfg5$Speaker)
+part3_dfg5$Speaker[part3_dfg5$Speaker==2] <- 5
+part3_dfg6 <- part3_df%>%filter(key3==1)%>%group_by(monthly,Title)%>%filter(person6==1)%>%count(person6)
+names(part3_dfg6)[3] <- "Speaker"
+part3_dfg6$Speaker <- as.numeric(part3_dfg6$Speaker)
+part3_dfg6$Speaker[part3_dfg6$Speaker==2] <- 6
+part3_dfg7 <- part3_df%>%filter(key3==1)%>%group_by(monthly,Title)%>%filter(person7==1)%>%count(person7)
+names(part3_dfg7)[3] <- "Speaker"
+part3_dfg7$Speaker <- as.numeric(part3_dfg7$Speaker)
+part3_dfg7$Speaker[part3_dfg7$Speaker==2] <- 7
+
+part3_dfg <- rbind(part3_dfg1,part3_dfg2)
+part3_dfg <- rbind(part3_dfg,part3_dfg3)
+part3_dfg <- rbind(part3_dfg,part3_dfg4)
+part3_dfg <- rbind(part3_dfg,part3_dfg5)
+part3_dfg <- rbind(part3_dfg,part3_dfg6)
+part3_dfg <- rbind(part3_dfg,part3_dfg7)
+part3_dfg$Speaker <- as.character(part3_dfg$Speaker)
+part3_dfg$n <- as.numeric(part3_dfg$n)
+
+main_g3 <- part3_dfg%>%filter(!is.na(n))%>%filter(!is.na(Speaker))%>%filter(!is.na(monthly))%>%
+  ggplot(aes(x=monthly,y=n,fill=Speaker))+geom_bar(stat="identity")+
+  ylab("Frequency")+xlab("monthly")+
+  scale_fill_discrete(labels=c("KKW","LMS","LKO","HYK","PYS","KHJ","CHS"))+
+  labs(title="Restructuring",
+       caption="Figure: Bar graph by suspected speaker in 2007")+
+  theme_classic()
+main_g3
+```
+```{r}
+part3_dfg1 <- part3_df%>%filter(key4==1)%>%group_by(monthly,Title)%>%filter(person1==1)%>%count(person1)
+names(part3_dfg1)[3]<-"Speaker"
+part3_dfg1$Speaker <- as.numeric(part3_dfg1$Speaker)
+part3_dfg1$Speaker[part3_dfg1$Speaker==2] <- 1
+part3_dfg2 <- part3_df%>%filter(key4==1)%>%group_by(monthly,Title)%>%filter(person2==1)%>%count(person2)
+names(part3_dfg2)[3] <- "Speaker"
+part3_dfg2$Speaker <- as.numeric(part3_dfg2$Speaker)
+part3_dfg2$Speaker[part3_dfg2$Speaker==2] <- 2
+part3_dfg3 <- part3_df%>%filter(key4==1)%>%group_by(monthly,Title)%>%filter(person3==1)%>%count(person3)
+names(part3_dfg3)[3] <- "Speaker"
+part3_dfg3$Speaker <- as.numeric(part3_dfg3$Speaker)
+part3_dfg3$Speaker[part3_dfg3$Speaker==2] <- 3
+part3_dfg4 <- part3_df%>%filter(key4==1)%>%group_by(monthly,Title)%>%filter(person4==1)%>%count(person4)
+names(part3_dfg4)[3] <- "Speaker"
+part3_dfg4$Speaker <- as.numeric(part3_dfg4$Speaker)
+part3_dfg4$Speaker[part3_dfg4$Speaker==2] <- 4
+part3_dfg5 <- part3_df%>%filter(key4==1)%>%group_by(monthly,Title)%>%filter(person5==1)%>%count(person5)
+names(part3_dfg5)[3] <- "Speaker"
+part3_dfg5$Speaker <- as.numeric(part3_dfg5$Speaker)
+part3_dfg5$Speaker[part3_dfg5$Speaker==2] <- 5
+part3_dfg6 <- part3_df%>%filter(key4==1)%>%group_by(monthly,Title)%>%filter(person6==1)%>%count(person6)
+names(part3_dfg6)[3] <- "Speaker"
+part3_dfg6$Speaker <- as.numeric(part3_dfg6$Speaker)
+part3_dfg6$Speaker[part3_dfg6$Speaker==2] <- 6
+part3_dfg7 <- part3_df%>%filter(key4==1)%>%group_by(monthly,Title)%>%filter(person7==1)%>%count(person7)
+names(part3_dfg7)[3] <- "Speaker"
+part3_dfg7$Speaker <- as.numeric(part3_dfg7$Speaker)
+part3_dfg7$Speaker[part3_dfg7$Speaker==2] <- 7
+
+part3_dfg <- rbind(part3_dfg1,part3_dfg2)
+part3_dfg <- rbind(part3_dfg,part3_dfg3)
+part3_dfg <- rbind(part3_dfg,part3_dfg4)
+part3_dfg <- rbind(part3_dfg,part3_dfg5)
+part3_dfg <- rbind(part3_dfg,part3_dfg6)
+part3_dfg <- rbind(part3_dfg,part3_dfg7)
+part3_dfg$Speaker <- as.character(part3_dfg$Speaker)
+part3_dfg$n <- as.numeric(part3_dfg$n)
+
+main_g4 <- part3_dfg%>%filter(!is.na(n))%>%filter(!is.na(Speaker))%>%filter(!is.na(monthly))%>%
+  ggplot(aes(x=monthly,y=n,fill=Speaker))+geom_bar(stat="identity")+
+  ylab("Frequency")+xlab("monthly")+
+  scale_fill_discrete(labels=c("KKW","LMS","LKO","HYK","PYS","KHJ","CHS"))+
+  labs(title="Restructuring (wih space)",
+       caption="Figure: Bar graph by suspected speaker in 2007")+
+  theme_classic()
+main_g4
+
+```
+```{r}
+part3_dflimg1 <- part3_dflim%>%filter(key1==1)%>%group_by(week,Title)%>%filter(person1==1)%>%count(person1)
+names(part3_dflimg1)[3]<-"Speaker"
+part3_dflimg1$Speaker <- as.numeric(part3_dflimg1$Speaker)
+part3_dflimg1$Speaker[part3_dflimg1$Speaker==2] <- 1
+part3_dflimg2 <- part3_dflim%>%filter(key1==1)%>%group_by(week,Title)%>%filter(person2==1)%>%count(person2)
+names(part3_dflimg2)[3] <- "Speaker"
+part3_dflimg2$Speaker <- as.numeric(part3_dflimg2$Speaker)
+part3_dflimg2$Speaker[part3_dflimg2$Speaker==2] <- 2
+part3_dflimg3 <- part3_dflim%>%filter(key1==1)%>%group_by(week,Title)%>%filter(person3==1)%>%count(person3)
+names(part3_dflimg3)[3] <- "Speaker"
+part3_dflimg3$Speaker <- as.numeric(part3_dflimg3$Speaker)
+part3_dflimg3$Speaker[part3_dflimg3$Speaker==2] <- 3
+part3_dflimg4 <- part3_dflim%>%filter(key1==1)%>%group_by(week,Title)%>%filter(person4==1)%>%count(person4)
+names(part3_dflimg4)[3] <- "Speaker"
+part3_dflimg4$Speaker <- as.numeric(part3_dflimg4$Speaker)
+part3_dflimg4$Speaker[part3_dflimg4$Speaker==2] <- 4
+part3_dflimg5 <- part3_dflim%>%filter(key1==1)%>%group_by(week,Title)%>%filter(person5==1)%>%count(person5)
+names(part3_dflimg5)[3] <- "Speaker"
+part3_dflimg5$Speaker <- as.numeric(part3_dflimg5$Speaker)
+part3_dflimg5$Speaker[part3_dflimg5$Speaker==2] <- 5
+part3_dflimg6 <- part3_dflim%>%filter(key1==1)%>%group_by(week,Title)%>%filter(person6==1)%>%count(person6)
+names(part3_dflimg6)[3] <- "Speaker"
+part3_dflimg6$Speaker <- as.numeric(part3_dflimg6$Speaker)
+part3_dflimg6$Speaker[part3_dflimg6$Speaker==2] <- 6
+part3_dflimg7 <- part3_dflim%>%filter(key1==1)%>%group_by(week,Title)%>%filter(person7==1)%>%count(person7)
+names(part3_dflimg7)[3] <- "Speaker"
+part3_dflimg7$Speaker <- as.numeric(part3_dflimg7$Speaker)
+part3_dflimg7$Speaker[part3_dflimg7$Speaker==2] <- 7
+
+part3_dflimg <- rbind(part3_dflimg1,part3_dflimg2)
+part3_dflimg <- rbind(part3_dflimg,part3_dflimg3)
+part3_dflimg <- rbind(part3_dflimg,part3_dflimg4)
+part3_dflimg <- rbind(part3_dflimg,part3_dflimg5)
+part3_dflimg <- rbind(part3_dflimg,part3_dflimg6)
+part3_dflimg <- rbind(part3_dflimg,part3_dflimg7)
+part3_dflimg$Speaker <- as.character(part3_dflimg$Speaker)
+part3_dflimg$n <- as.numeric(part3_dflimg$n)
+
+main_limg1 <- part3_dflimg%>%filter(!is.na(n))%>%filter(!is.na(Speaker))%>%filter(!is.na(week))%>%
+  ggplot(aes(x=week,y=n,fill=Speaker))+geom_bar(stat="identity")+
+  ylab("Frequency")+xlab("week")+
+  scale_fill_discrete(labels=c("KKW","LMS","LKO","HYK","PYS","KHJ","CHS"))+
+  labs(title="Reassignment",
+       caption="Figure: Bar graph by suspected speaker in 2007 May 1st ~ Oct 31st")+
+  theme_classic()
+main_limg1
+
+```
+```{r}
+part3_dflimg1 <- part3_dflim%>%filter(key2==1)%>%group_by(week,Title)%>%filter(person1==1)%>%count(person1)
+names(part3_dflimg1)[3]<-"Speaker"
+part3_dflimg1$Speaker <- as.numeric(part3_dflimg1$Speaker)
+part3_dflimg1$Speaker[part3_dflimg1$Speaker==2] <- 1
+part3_dflimg2 <- part3_dflim%>%filter(key2==1)%>%group_by(week,Title)%>%filter(person2==1)%>%count(person2)
+names(part3_dflimg2)[3] <- "Speaker"
+part3_dflimg2$Speaker <- as.numeric(part3_dflimg2$Speaker)
+part3_dflimg2$Speaker[part3_dflimg2$Speaker==2] <- 2
+part3_dflimg3 <- part3_dflim%>%filter(key2==1)%>%group_by(week,Title)%>%filter(person3==1)%>%count(person3)
+names(part3_dflimg3)[3] <- "Speaker"
+part3_dflimg3$Speaker <- as.numeric(part3_dflimg3$Speaker)
+part3_dflimg3$Speaker[part3_dflimg3$Speaker==2] <- 3
+part3_dflimg4 <- part3_dflim%>%filter(key2==1)%>%group_by(week,Title)%>%filter(person4==1)%>%count(person4)
+names(part3_dflimg4)[3] <- "Speaker"
+part3_dflimg4$Speaker <- as.numeric(part3_dflimg4$Speaker)
+part3_dflimg4$Speaker[part3_dflimg4$Speaker==2] <- 4
+part3_dflimg5 <- part3_dflim%>%filter(key2==1)%>%group_by(week,Title)%>%filter(person5==1)%>%count(person5)
+names(part3_dflimg5)[3] <- "Speaker"
+part3_dflimg5$Speaker <- as.numeric(part3_dflimg5$Speaker)
+part3_dflimg5$Speaker[part3_dflimg5$Speaker==2] <- 5
+part3_dflimg6 <- part3_dflim%>%filter(key2==1)%>%group_by(week,Title)%>%filter(person6==1)%>%count(person6)
+names(part3_dflimg6)[3] <- "Speaker"
+part3_dflimg6$Speaker <- as.numeric(part3_dflimg6$Speaker)
+part3_dflimg6$Speaker[part3_dflimg6$Speaker==2] <- 6
+part3_dflimg7 <- part3_dflim%>%filter(key2==1)%>%group_by(week,Title)%>%filter(person7==1)%>%count(person7)
+names(part3_dflimg7)[3] <- "Speaker"
+part3_dflimg7$Speaker <- as.numeric(part3_dflimg7$Speaker)
+part3_dflimg7$Speaker[part3_dflimg7$Speaker==2] <- 7
+
+part3_dflimg <- rbind(part3_dflimg1,part3_dflimg2)
+part3_dflimg <- rbind(part3_dflimg,part3_dflimg3)
+part3_dflimg <- rbind(part3_dflimg,part3_dflimg4)
+part3_dflimg <- rbind(part3_dflimg,part3_dflimg5)
+part3_dflimg <- rbind(part3_dflimg,part3_dflimg6)
+part3_dflimg <- rbind(part3_dflimg,part3_dflimg7)
+part3_dflimg$Speaker <- as.character(part3_dflimg$Speaker)
+part3_dflimg$n <- as.numeric(part3_dflimg$n)
+
+main_limg2 <- part3_dflimg%>%filter(!is.na(n))%>%filter(!is.na(Speaker))%>%filter(!is.na(week))%>%
+  ggplot(aes(x=week,y=n,fill=Speaker))+geom_bar(stat="identity")+
+  ylab("Frequency")+xlab("week")+
+  scale_fill_discrete(labels=c("KKW","LMS","LKO","HYK","PYS","KHJ","CHS"))+
+  labs(title="Reassignment (with space)",
+       caption="Figure: Bar graph by suspected speaker in 2007 May 1st ~ Oct 31st")+
+  theme_classic()
+main_limg2
+
+```
+```{r}
+part3_dflimg1 <- part3_dflim%>%filter(key3==1)%>%group_by(week,Title)%>%filter(person1==1)%>%count(person1)
+names(part3_dflimg1)[3]<-"Speaker"
+part3_dflimg1$Speaker <- as.numeric(part3_dflimg1$Speaker)
+part3_dflimg1$Speaker[part3_dflimg1$Speaker==2] <- 1
+part3_dflimg2 <- part3_dflim%>%filter(key3==1)%>%group_by(week,Title)%>%filter(person2==1)%>%count(person2)
+names(part3_dflimg2)[3] <- "Speaker"
+part3_dflimg2$Speaker <- as.numeric(part3_dflimg2$Speaker)
+part3_dflimg2$Speaker[part3_dflimg2$Speaker==2] <- 2
+part3_dflimg3 <- part3_dflim%>%filter(key3==1)%>%group_by(week,Title)%>%filter(person3==1)%>%count(person3)
+names(part3_dflimg3)[3] <- "Speaker"
+part3_dflimg3$Speaker <- as.numeric(part3_dflimg3$Speaker)
+part3_dflimg3$Speaker[part3_dflimg3$Speaker==2] <- 3
+part3_dflimg4 <- part3_dflim%>%filter(key3==1)%>%group_by(week,Title)%>%filter(person4==1)%>%count(person4)
+names(part3_dflimg4)[3] <- "Speaker"
+part3_dflimg4$Speaker <- as.numeric(part3_dflimg4$Speaker)
+part3_dflimg4$Speaker[part3_dflimg4$Speaker==2] <- 4
+part3_dflimg5 <- part3_dflim%>%filter(key3==1)%>%group_by(week,Title)%>%filter(person5==1)%>%count(person5)
+names(part3_dflimg5)[3] <- "Speaker"
+part3_dflimg5$Speaker <- as.numeric(part3_dflimg5$Speaker)
+part3_dflimg5$Speaker[part3_dflimg5$Speaker==2] <- 5
+part3_dflimg6 <- part3_dflim%>%filter(key3==1)%>%group_by(week,Title)%>%filter(person6==1)%>%count(person6)
+names(part3_dflimg6)[3] <- "Speaker"
+part3_dflimg6$Speaker <- as.numeric(part3_dflimg6$Speaker)
+part3_dflimg6$Speaker[part3_dflimg6$Speaker==2] <- 6
+part3_dflimg7 <- part3_dflim%>%filter(key3==1)%>%group_by(week,Title)%>%filter(person7==1)%>%count(person7)
+names(part3_dflimg7)[3] <- "Speaker"
+part3_dflimg7$Speaker <- as.numeric(part3_dflimg7$Speaker)
+part3_dflimg7$Speaker[part3_dflimg7$Speaker==2] <- 7
+
+part3_dflimg <- rbind(part3_dflimg1,part3_dflimg2)
+part3_dflimg <- rbind(part3_dflimg,part3_dflimg3)
+part3_dflimg <- rbind(part3_dflimg,part3_dflimg4)
+part3_dflimg <- rbind(part3_dflimg,part3_dflimg5)
+part3_dflimg <- rbind(part3_dflimg,part3_dflimg6)
+part3_dflimg <- rbind(part3_dflimg,part3_dflimg7)
+part3_dflimg$Speaker <- as.character(part3_dflimg$Speaker)
+part3_dflimg$n <- as.numeric(part3_dflimg$n)
+
+main_limg3 <- part3_dflimg%>%filter(!is.na(n))%>%filter(!is.na(Speaker))%>%filter(!is.na(week))%>%
+  ggplot(aes(x=week,y=n,fill=Speaker))+geom_bar(stat="identity")+
+  ylab("Frequency")+xlab("week")+
+  scale_fill_discrete(labels=c("KKW","LMS","LKO","HYK","PYS","KHJ","CHS"))+
+  labs(title="Restructuring",
+       caption="Figure: Bar graph by suspected speaker in 2007 May 1st ~ Oct 31st")+
+  theme_classic()
+main_limg3
+
+```
+```{r}
+part3_dflimg1 <- part3_dflim%>%filter(key4==1)%>%group_by(week,Title)%>%filter(person1==1)%>%count(person1)
+names(part3_dflimg1)[3]<-"Speaker"
+part3_dflimg1$Speaker <- as.numeric(part3_dflimg1$Speaker)
+part3_dflimg1$Speaker[part3_dflimg1$Speaker==2] <- 1
+part3_dflimg2 <- part3_dflim%>%filter(key4==1)%>%group_by(week,Title)%>%filter(person2==1)%>%count(person2)
+names(part3_dflimg2)[3] <- "Speaker"
+part3_dflimg2$Speaker <- as.numeric(part3_dflimg2$Speaker)
+part3_dflimg2$Speaker[part3_dflimg2$Speaker==2] <- 2
+part3_dflimg3 <- part3_dflim%>%filter(key4==1)%>%group_by(week,Title)%>%filter(person3==1)%>%count(person3)
+names(part3_dflimg3)[3] <- "Speaker"
+part3_dflimg3$Speaker <- as.numeric(part3_dflimg3$Speaker)
+part3_dflimg3$Speaker[part3_dflimg3$Speaker==2] <- 3
+part3_dflimg4 <- part3_dflim%>%filter(key4==1)%>%group_by(week,Title)%>%filter(person4==1)%>%count(person4)
+names(part3_dflimg4)[3] <- "Speaker"
+part3_dflimg4$Speaker <- as.numeric(part3_dflimg4$Speaker)
+part3_dflimg4$Speaker[part3_dflimg4$Speaker==2] <- 4
+part3_dflimg5 <- part3_dflim%>%filter(key4==1)%>%group_by(week,Title)%>%filter(person5==1)%>%count(person5)
+names(part3_dflimg5)[3] <- "Speaker"
+part3_dflimg5$Speaker <- as.numeric(part3_dflimg5$Speaker)
+part3_dflimg5$Speaker[part3_dflimg5$Speaker==2] <- 5
+part3_dflimg6 <- part3_dflim%>%filter(key4==1)%>%group_by(week,Title)%>%filter(person6==1)%>%count(person6)
+names(part3_dflimg6)[3] <- "Speaker"
+part3_dflimg6$Speaker <- as.numeric(part3_dflimg6$Speaker)
+part3_dflimg6$Speaker[part3_dflimg6$Speaker==2] <- 6
+part3_dflimg7 <- part3_dflim%>%filter(key4==1)%>%group_by(week,Title)%>%filter(person7==1)%>%count(person7)
+names(part3_dflimg7)[3] <- "Speaker"
+part3_dflimg7$Speaker <- as.numeric(part3_dflimg7$Speaker)
+part3_dflimg7$Speaker[part3_dflimg7$Speaker==2] <- 7
+
+part3_dflimg <- rbind(part3_dflimg1,part3_dflimg2)
+part3_dflimg <- rbind(part3_dflimg,part3_dflimg3)
+part3_dflimg <- rbind(part3_dflimg,part3_dflimg4)
+part3_dflimg <- rbind(part3_dflimg,part3_dflimg5)
+part3_dflimg <- rbind(part3_dflimg,part3_dflimg6)
+part3_dflimg <- rbind(part3_dflimg,part3_dflimg7)
+part3_dflimg$Speaker <- as.character(part3_dflimg$Speaker)
+part3_dflimg$n <- as.numeric(part3_dflimg$n)
+
+main_limg4 <- part3_dflimg%>%filter(!is.na(n))%>%filter(!is.na(Speaker))%>%filter(!is.na(week))%>%
+  ggplot(aes(x=week,y=n,fill=Speaker))+geom_bar(stat="identity")+
+  ylab("Frequency")+xlab("week")+
+  scale_fill_discrete(labels=c("KKW","LMS","LKO","HYK","PYS","KHJ","CHS"))+
+  labs(title="Restructuring (with space)",
+       caption="Figure: Bar graph by suspected speaker in 2007 May 1st ~ Oct 31st")+
+  theme_classic()
+main_limg4
+```
+```{r}
+half_main<-main_df[main_df$Dates>="2007-06-01"&main_df$Dates<="2007-12-31",]
+half_main <- text_df%>%left_join(half_main,by="Title")
+half_main$key1 <- as.factor(as.integer(grepl(pattern = "ÀÌ·£µå",half_main$Lines)))
+half_main$key2 <- as.factor(as.integer(grepl(pattern = "³ëµ¿°è",half_main$Lines)))
+half_main$key3 <- as.factor(as.integer(grepl(pattern = "°æ¿µ°è",half_main$Lines)))
+half_main$key4 <- as.factor(as.integer(grepl(pattern = "´ë¸®Àü",half_main$Lines)))
+half_main$person1 <- as.factor(as.integer(grepl(pattern = "±è°æ¿í",x=half_main$Lines)))
+half_main$person2 <- as.factor(as.integer(grepl(pattern = "ÀÌ³²½Å",x=half_main$Lines)))
+half_main$person3 <- as.factor(as.integer(grepl(pattern = "ÀÌ°æ¿Á",x=half_main$Lines)))
+half_main$person4 <- as.factor(as.integer(grepl(pattern = "È«À±°æ",x=half_main$Lines)))
+half_main$person5 <- as.factor(as.integer(grepl(pattern = "¹Ú¾ç¼ö",x=half_main$Lines)))
+half_main$person6 <- as.factor(as.integer(grepl(pattern = "±èÈ£Áø",x=half_main$Lines)))
+half_main$person7 <- as.factor(as.integer(grepl(pattern = "ÃÖÈ£¼·",x=half_main$Lines)))
+
+
+```
+```{r}
+half_maing1 <- half_main%>%filter(key1==1)%>%group_by(week,Title)%>%filter(person1==1)%>%count(person1)
+names(half_maing1)[3]<-"Speaker"
+half_maing1$Speaker <- as.numeric(half_maing1$Speaker)
+half_maing1$Speaker[half_maing1$Speaker==2] <- 1
+half_maing2 <- half_main%>%filter(key1==1)%>%group_by(week,Title)%>%filter(person2==1)%>%count(person2)
+names(half_maing2)[3] <- "Speaker"
+half_maing2$Speaker <- as.numeric(half_maing2$Speaker)
+half_maing2$Speaker[half_maing2$Speaker==2] <- 2
+half_maing3 <- half_main%>%filter(key1==1)%>%group_by(week,Title)%>%filter(person3==1)%>%count(person3)
+names(half_maing3)[3] <- "Speaker"
+half_maing3$Speaker <- as.numeric(half_maing3$Speaker)
+half_maing3$Speaker[half_maing3$Speaker==2] <- 3
+half_maing4 <- half_main%>%filter(key1==1)%>%group_by(week,Title)%>%filter(person4==1)%>%count(person4)
+names(half_maing4)[3] <- "Speaker"
+half_maing4$Speaker <- as.numeric(half_maing4$Speaker)
+half_maing4$Speaker[half_maing4$Speaker==2] <- 4
+half_maing5 <- half_main%>%filter(key1==1)%>%group_by(week,Title)%>%filter(person5==1)%>%count(person5)
+names(half_maing5)[3] <- "Speaker"
+half_maing5$Speaker <- as.numeric(half_maing5$Speaker)
+half_maing5$Speaker[half_maing5$Speaker==2] <- 5
+half_maing6 <- half_main%>%filter(key1==1)%>%group_by(week,Title)%>%filter(person6==1)%>%count(person6)
+names(half_maing6)[3] <- "Speaker"
+half_maing6$Speaker <- as.numeric(half_maing6$Speaker)
+half_maing6$Speaker[half_maing6$Speaker==2] <- 6
+half_maing7 <- half_main%>%filter(key1==1)%>%group_by(week,Title)%>%filter(person7==1)%>%count(person7)
+names(half_maing7)[3] <- "Speaker"
+half_maing7$Speaker <- as.numeric(half_maing7$Speaker)
+half_maing7$Speaker[half_maing7$Speaker==2] <- 7
+
+half_maing <- rbind(half_maing1,half_maing2)
+half_maing <- rbind(half_maing,half_maing3)
+half_maing <- rbind(half_maing,half_maing4)
+half_maing <- rbind(half_maing,half_maing5)
+half_maing <- rbind(half_maing,half_maing6)
+half_maing <- rbind(half_maing,half_maing7)
+half_maing$Speaker <- as.character(half_maing$Speaker)
+half_maing$n <- as.numeric(half_maing$n)
+
+half_g1 <- half_maing%>%filter(!is.na(n))%>%filter(!is.na(Speaker))%>%filter(!is.na(week))%>%
+  ggplot(aes(x=week,y=n,fill=Speaker))+geom_bar(stat="identity")+
+  ylab("Frequency")+xlab("week")+
+  scale_fill_discrete(labels=c("KKW","LMS","LKO","HYK","PYS","KHJ","CHS"))+
+  labs(title="Eland",
+       caption="Figure: Bar graph by suspected speaker in 2007 Jun 1st ~ Dec 31st")+
+  theme_classic()
+half_g1
+```
+```{r}
+half_maing1 <- half_main%>%filter(key2==1)%>%group_by(week,Title)%>%filter(person1==1)%>%count(person1)
+names(half_maing1)[3]<-"Speaker"
+half_maing1$Speaker <- as.numeric(half_maing1$Speaker)
+half_maing1$Speaker[half_maing1$Speaker==2] <- "KKW"
+half_maing2 <- half_main%>%filter(key2==1)%>%group_by(week,Title)%>%filter(person2==1)%>%count(person2)
+names(half_maing2)[3] <- "Speaker"
+half_maing2$Speaker <- as.numeric(half_maing2$Speaker)
+half_maing2$Speaker[half_maing2$Speaker==2] <- "LKO"
+half_maing3 <- half_main%>%filter(key2==1)%>%group_by(week,Title)%>%filter(person3==1)%>%count(person3)
+names(half_maing3)[3] <- "Speaker"
+half_maing3$Speaker <- as.numeric(half_maing3$Speaker)
+half_maing3$Speaker[half_maing3$Speaker==2] <- "LNS"
+half_maing4 <- half_main%>%filter(key2==1)%>%group_by(week,Title)%>%filter(person4==1)%>%count(person4)
+names(half_maing4)[3] <- "Speaker"
+half_maing4$Speaker <- as.numeric(half_maing4$Speaker)
+half_maing4$Speaker[half_maing4$Speaker==2] <- "HYK"
+half_maing5 <- half_main%>%filter(key2==1)%>%group_by(week,Title)%>%filter(person5==1)%>%count(person5)
+names(half_maing5)[3] <- "Speaker"
+half_maing5$Speaker <- as.numeric(half_maing5$Speaker)
+half_maing5$Speaker[half_maing5$Speaker==2] <- "PYS"
+half_maing6 <- half_main%>%filter(key2==1)%>%group_by(week,Title)%>%filter(person6==1)%>%count(person6)
+names(half_maing6)[3] <- "Speaker"
+half_maing6$Speaker <- as.numeric(half_maing6$Speaker)
+half_maing6$Speaker[half_maing6$Speaker==2] <- "PYS"
+half_maing7 <- half_main%>%filter(key2==1)%>%group_by(week,Title)%>%filter(person7==1)%>%count(person7)
+names(half_maing7)[3] <- "Speaker"
+half_maing7$Speaker <- as.numeric(half_maing7$Speaker)
+half_maing7$Speaker[half_maing7$Speaker==2] <- "KHJ"
+
+half_maing <- rbind(half_maing1,half_maing2)
+half_maing <- rbind(half_maing,half_maing3)
+half_maing <- rbind(half_maing,half_maing4)
+half_maing <- rbind(half_maing,half_maing5)
+half_maing <- rbind(half_maing,half_maing6)
+half_maing <- rbind(half_maing,half_maing7)
+half_maing$Speaker <- as.character(half_maing$Speaker)
+half_maing$n <- as.numeric(half_maing$n)
+
+half_g2 <- half_maing%>%filter(!is.na(n))%>%filter(!is.na(Speaker))%>%filter(!is.na(week))%>%
+  ggplot(aes(x=week,y=n,fill=Speaker))+geom_bar(stat="identity")+
+  ylab("Frequency")+xlab("week")+
+  scale_fill_discrete(labels=c("KKW","LMS","LKO","HYK","PYS","KHJ","CHS"))+
+  labs(title="³ëµ¿°è",
+       caption="Figure: Bar graph by suspected speaker in 2007 Jun 1st~Dec 31st")+
+  theme_classic()
+half_g2
+
+```
+```{r}
+half_maing1 <- half_main%>%filter(key3==1)%>%group_by(week,Title)%>%filter(person1==1)%>%count(person1)
+names(half_maing1)[3]<-"Speaker"
+half_maing1$Speaker <- as.numeric(half_maing1$Speaker)
+half_maing1$Speaker[half_maing1$Speaker==2] <- 1
+half_maing2 <- half_main%>%filter(key3==1)%>%group_by(week,Title)%>%filter(person2==1)%>%count(person2)
+names(half_maing2)[3] <- "Speaker"
+half_maing2$Speaker <- as.numeric(half_maing2$Speaker)
+half_maing2$Speaker[half_maing2$Speaker==2] <- 2
+half_maing3 <- half_main%>%filter(key3==1)%>%group_by(week,Title)%>%filter(person3==1)%>%count(person3)
+names(half_maing3)[3] <- "Speaker"
+half_maing3$Speaker <- as.numeric(half_maing3$Speaker)
+half_maing3$Speaker[half_maing3$Speaker==2] <- 3
+half_maing4 <- half_main%>%filter(key3==1)%>%group_by(week,Title)%>%filter(person4==1)%>%count(person4)
+names(half_maing4)[3] <- "Speaker"
+half_maing4$Speaker <- as.numeric(half_maing4$Speaker)
+half_maing4$Speaker[half_maing4$Speaker==2] <- 4
+half_maing5 <- half_main%>%filter(key3==1)%>%group_by(week,Title)%>%filter(person5==1)%>%count(person5)
+names(half_maing5)[3] <- "Speaker"
+half_maing5$Speaker <- as.numeric(half_maing5$Speaker)
+half_maing5$Speaker[half_maing5$Speaker==2] <- 5
+half_maing6 <- half_main%>%filter(key3==1)%>%group_by(week,Title)%>%filter(person6==1)%>%count(person6)
+names(half_maing6)[3] <- "Speaker"
+half_maing6$Speaker <- as.numeric(half_maing6$Speaker)
+half_maing6$Speaker[half_maing6$Speaker==2] <- 6
+half_maing7 <- half_main%>%filter(key3==1)%>%group_by(week,Title)%>%filter(person7==1)%>%count(person7)
+names(half_maing7)[3] <- "Speaker"
+half_maing7$Speaker <- as.numeric(half_maing7$Speaker)
+half_maing7$Speaker[half_maing7$Speaker==2] <- 7
+
+half_maing <- rbind(half_maing1,half_maing2)
+half_maing <- rbind(half_maing,half_maing3)
+half_maing <- rbind(half_maing,half_maing4)
+half_maing <- rbind(half_maing,half_maing5)
+half_maing <- rbind(half_maing,half_maing6)
+half_maing <- rbind(half_maing,half_maing7)
+half_maing$Speaker <- as.character(half_maing$Speaker)
+half_maing$n <- as.numeric(half_maing$n)
+
+main_g3 <- half_maing%>%filter(!is.na(n))%>%filter(!is.na(Speaker))%>%filter(!is.na(week))%>%
+  ggplot(aes(x=week,y=n,fill=Speaker))+geom_bar(stat="identity")+
+  ylab("Frequency")+xlab("week")+
+  scale_fill_discrete(labels=c("KKW","LMS","LKO","HYK","PYS","KHJ","CHS"))+
+  labs(title="°æ¿µ°è",
+       caption="Figure: Bar graph by suspected speaker in 2007")+
+  ggthemes::theme_stata()
+main_g3
+```
+```{r}
+half_maing1 <- half_main%>%filter(key4==1)%>%group_by(week,Title)%>%filter(person1==1)%>%count(person1)
+names(half_maing1)[3]<-"Speaker"
+half_maing1$Speaker <- as.numeric(half_maing1$Speaker)
+half_maing1$Speaker[half_maing1$Speaker==2] <- 1
+half_maing2 <- half_main%>%filter(key4==1)%>%group_by(week,Title)%>%filter(person2==1)%>%count(person2)
+names(half_maing2)[3] <- "Speaker"
+half_maing2$Speaker <- as.numeric(half_maing2$Speaker)
+half_maing2$Speaker[half_maing2$Speaker==2] <- 2
+half_maing3 <- half_main%>%filter(key4==1)%>%group_by(week,Title)%>%filter(person3==1)%>%count(person3)
+names(half_maing3)[3] <- "Speaker"
+half_maing3$Speaker <- as.numeric(half_maing3$Speaker)
+half_maing3$Speaker[half_maing3$Speaker==2] <- 3
+half_maing4 <- half_main%>%filter(key4==1)%>%group_by(week,Title)%>%filter(person4==1)%>%count(person4)
+names(half_maing4)[3] <- "Speaker"
+half_maing4$Speaker <- as.numeric(half_maing4$Speaker)
+half_maing4$Speaker[half_maing4$Speaker==2] <- 4
+half_maing5 <- half_main%>%filter(key4==1)%>%group_by(week,Title)%>%filter(person5==1)%>%count(person5)
+names(half_maing5)[3] <- "Speaker"
+half_maing5$Speaker <- as.numeric(half_maing5$Speaker)
+half_maing5$Speaker[half_maing5$Speaker==2] <- 5
+half_maing6 <- half_main%>%filter(key4==1)%>%group_by(week,Title)%>%filter(person6==1)%>%count(person6)
+names(half_maing6)[3] <- "Speaker"
+half_maing6$Speaker <- as.numeric(half_maing6$Speaker)
+half_maing6$Speaker[half_maing6$Speaker==2] <- 6
+half_maing7 <- half_main%>%filter(key4==1)%>%group_by(week,Title)%>%filter(person7==1)%>%count(person7)
+names(half_maing7)[3] <- "Speaker"
+half_maing7$Speaker <- as.numeric(half_maing7$Speaker)
+half_maing7$Speaker[half_maing7$Speaker==2] <- 7
+
+half_maing <- rbind(half_maing1,half_maing2)
+half_maing <- rbind(half_maing,half_maing3)
+half_maing <- rbind(half_maing,half_maing4)
+half_maing <- rbind(half_maing,half_maing5)
+half_maing <- rbind(half_maing,half_maing6)
+half_maing <- rbind(half_maing,half_maing7)
+half_maing$Speaker <- as.character(half_maing$Speaker)
+half_maing$n <- as.numeric(half_maing$n)
+
+main_g4 <- half_maing%>%filter(!is.na(n))%>%filter(!is.na(Speaker))%>%filter(!is.na(week))%>%
+  ggplot(aes(x=week,y=n,fill=Speaker))+geom_bar(stat="identity")+
+  ylab("Frequency")+xlab("week")+
+  scale_fill_discrete(labels=c("KKW","LMS","LKO","HYK","PYS","KHJ","CHS"))+
+  labs(title="´ë¸®Àü",
+       caption="Figure: Bar graph by suspected speaker in 2007")+
+  ggthemes::theme_stata()
+main_g4
+
+```
+```{r}
+names(half_main)
+export_main<-half_main[,c("Title","Lines","Contents","Dates","Provider","week","monthly","key1","key2","key3","key4","person1","person2","person3","person4","person5","person6","person7")]
+
+```
+```{r}
+jeonhwan <- main_df
+jeonhwan$key1 <- as.factor(as.integer(grepl(pattern = "")))
+```
+```{r}
+main_df$jeonhwan<- as.integer(main_df$jeonhwan)
+sub_df <- main_df%>%group_by(Dates,monthly,Title)%>%count(jeonhwan)
+
+sub_df[sub_df$Dates>="2007-01-01"&sub_df$Dates<="2007-12-31",]%>%ggplot(aes(x=monthly,y=n))
+sub_df[sub_df$Dates>="2007-01-01"&sub_df$Dates<="2007-12-31",]%>%ggplot(aes(x=monthly,y=jeonhwan))+geom_bar(stat="identity")
+```
+```{r}
+main_df[main_df$Dates>="2007-01-01"&main_df$Dates<="2007-12-31",]%>%ggplot(aes(x=monthly,y=jeonhwan))+geom_bar(stat="identity")
+```
+```{r}
+part3_df$target1 <- ifelse(grepl(pattern = "´ë¸®Àü",part3_df$Lines),1,0)
+part3_df$person1[part3_df$target1==1&part3_df$person1==1]
+part3_df[part3_df$target1==1,]
+```
+```{r}
+
+```
+```{r}
+
+```
+```{r}
+
+```
+```{r}
+
+```
+```{r}
+
+```
+```{r}
+
+```
+```{r}
+
+```
